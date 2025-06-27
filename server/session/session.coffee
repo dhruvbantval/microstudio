@@ -79,6 +79,7 @@ class @Session
     @register "listen_to_project",(msg)=>@listenToProject(msg)
     @register "get_file_versions",(msg)=>@getFileVersions(msg)
     @register "sync_project_files",(msg)=>@syncProjectFiles(msg)
+    @register "read_component_data",(msg)=>@readComponentData(msg)
 
     @register "invite_to_project",(msg)=>@inviteToProject(msg)
     @register "accept_invite",(msg)=>@acceptInvite(msg)
@@ -941,6 +942,25 @@ class @Session
     if project?
       @setCurrentProject project
       project.manager.readProjectFile(@,data)
+
+  readComponentData:(data)->
+    return @sendError("not connected") if not @user?
+    
+    fs = require('fs')
+    path = require('path')
+    
+    try
+      dbPath = path.join(__dirname, '../../data/db.json')
+      dbData = fs.readFileSync(dbPath, 'utf8')
+      parsedData = JSON.parse(dbData)
+      
+      @send
+        name: "read_component_data"
+        data: parsedData
+        request_id: data.request_id
+    catch error
+      console.error 'Error reading db.json:', error
+      @sendError('Failed to read component data')
 
   listProjectFiles:(data)->
     return @sendError("not connected") if not @user?

@@ -29,6 +29,7 @@ class @SpriteEditor extends Manager
     document.getElementById("sprite-height").addEventListener "input",(event)=>@spriteDimensionChanged("height")
     document.getElementById("colortext").addEventListener "input",(event)=>@colortextChanged()
     document.getElementById("colortext-copy").addEventListener "click",(event)=>@colortextCopy()
+    document.getElementById("import-component-data-button").addEventListener "click",(event)=>@importComponentData()
 
     @sprite_size_validator = new InputValidator [document.getElementById("sprite-width"),document.getElementById("sprite-height")],
       document.getElementById("sprite-size-button"),
@@ -349,6 +350,201 @@ class @SpriteEditor extends Manager
         folder.setOpen true
 
       @createSprite name,null
+
+  importComponentData:()->
+    if @app.project
+      @app.project.importComponentData ()=>
+        @app.appui.showNotification("Component objects imported to main.ms!")
+        @createObjectQueryUI()
+        # Switch to code editor to show the imported code
+        if @app.editor
+          @app.setSection("code")
+
+  createObjectQueryUI:()->
+    # Create UI elements for querying object data
+    container = document.getElementById("spriteeditor")
+    if container and not document.getElementById("object-query-ui")
+      uiContainer = document.createElement("div")
+      uiContainer.id = "object-query-ui"
+      uiContainer.style.cssText = """
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: rgba(0, 0, 0, 0.9);
+        padding: 15px;
+        border-radius: 8px;
+        color: white;
+        font-family: 'Courier New', monospace;
+        z-index: 1000;
+        min-width: 300px;
+        border: 2px solid #444;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+      """
+      
+      uiContainer.innerHTML = """
+        <div style="margin-bottom: 15px; font-weight: bold; font-size: 14px; color: #4CAF50;">Object Query</div>
+        <div style="margin-bottom: 10px;">
+          <input type="text" id="object-id-input" placeholder="Enter object ID (e.g. rect1)" 
+                 style="width: 180px; padding: 5px; margin-right: 8px; color: black; border: 1px solid #666; border-radius: 3px;">
+          <button id="query-object-btn" style="padding: 5px 12px; background: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer;">Get Data</button>
+        </div>
+        <div style="margin-bottom: 10px;">
+          <button id="list-objects-btn" style="padding: 5px 12px; margin-right: 8px; background: #2196F3; color: white; border: none; border-radius: 3px; cursor: pointer;">List All</button>
+          <button id="close-query-ui-btn" style="padding: 5px 12px; background: #f44336; color: white; border: none; border-radius: 3px; cursor: pointer; float: right;">✕</button>
+        </div>
+        <div style="clear: both; margin-bottom: 5px; font-size: 12px; color: #aaa;">
+          Drag bottom-right corner to resize:
+        </div>
+        <div id="object-query-result" style="
+          min-height: 200px; 
+          height: 300px;
+          max-height: 500px;
+          font-size: 11px; 
+          overflow-y: auto; 
+          background: rgba(0,0,0,0.8); 
+          color: #e0e0e0;
+          padding: 12px; 
+          border-radius: 4px; 
+          white-space: pre-wrap;
+          border: 1px solid #666;
+          resize: both;
+          overflow: auto;
+          font-family: 'Courier New', monospace;
+          line-height: 1.3;
+          word-wrap: break-word;
+        ">Ready for queries...</div>
+      """
+      
+      container.appendChild(uiContainer)
+      
+      # Add event listeners
+      document.getElementById("query-object-btn").addEventListener "click", ()=>
+        @queryObjectData()
+      
+      document.getElementById("list-objects-btn").addEventListener "click", ()=>
+        @listAllObjects()
+        
+      document.getElementById("close-query-ui-btn").addEventListener "click", ()=>
+        uiContainer.remove()
+      
+      document.getElementById("object-id-input").addEventListener "keypress", (event)=>
+        if event.key == "Enter"
+          @queryObjectData()
+
+  queryObjectData:()->
+    objectId = document.getElementById("object-id-input").value.trim()
+    resultDiv = document.getElementById("object-query-result")
+    
+    if not objectId
+      resultDiv.textContent = "Please enter an object ID"
+      return
+    
+    # Send request to get object data
+    @app.client.sendRequest {
+      name: "read_component_data"
+    }, (msg)=>
+      if msg.data and msg.data.objects and msg.data.objects[objectId]
+        objectData = msg.data.objects[objectId]
+        
+        # Console log the data nicely
+        console.log("=== OBJECT DATA FOR '#{objectId}' ===")
+        console.log("Shape:", objectData.shape)
+        console.log("Position:", objectData.position)
+        if objectData.shape == "rectangle"
+          console.log("Size:", objectData.size)
+        else if objectData.shape == "circle"
+          console.log("Radius:", objectData.radius)
+        console.log("Class:", objectData.class)
+        console.log("Components:", objectData.components)
+        console.log("Variable Values:", objectData.variableValues)
+        console.log("Full Object:", objectData)
+        console.log("=== END ===")
+        
+        # Format the output for display
+        output = "=== #{objectId.toUpperCase()} ===\n\n"
+        output += "Shape: #{objectData.shape}\n"
+        output += "Position: x=#{objectData.position?.x || 0}, y=#{objectData.position?.y || 0}\n"
+        
+        if objectData.shape == "rectangle" and objectData.size
+          output += "Dimensions: #{objectData.size.width} x #{objectData.size.height}\n"
+          output += "Usage: rect(#{objectData.position?.x || 0}, #{objectData.position?.y || 0}, #{objectData.size.width}, #{objectData.size.height})\n"
+        else if objectData.shape == "circle" and objectData.radius
+          output += "Radius: #{objectData.radius}\n"
+          output += "Usage: circle(#{objectData.position?.x || 0}, #{objectData.position?.y || 0}, #{objectData.radius})\n"
+        
+        output += "\nClass: #{objectData.class || 'none'}\n"
+        output += "Components: #{objectData.components?.join(', ') || 'none'}\n"
+        
+        if objectData.variableValues
+          output += "\n--- Component Data ---\n"
+          for component, values of objectData.variableValues
+            output += "#{component}:\n"
+            for key, value of values
+              output += "  • #{key}: #{JSON.stringify(value)}\n"
+        
+        output += "\n--- Code Examples ---\n"
+        output += "draw_object(\"#{objectId}\")\n"
+        output += "data = get_object(\"#{objectId}\")\n"
+        if objectData.shape == "rectangle"
+          output += "draw_object(\"#{objectId}\", 100, 50)  // custom position"
+        else
+          output += "draw_object(\"#{objectId}\", 200, 150)  // custom position"
+        
+        resultDiv.textContent = output
+      else
+        console.log("Object '#{objectId}' not found in data:", msg.data)
+        resultDiv.textContent = "Object '#{objectId}' not found\n\nAvailable objects:\n#{if msg.data?.objects then Object.keys(msg.data.objects).join(', ') else 'none'}"
+
+  listAllObjects:()->
+    resultDiv = document.getElementById("object-query-result")
+    
+    # Send request to get all object data
+    @app.client.sendRequest {
+      name: "read_component_data"
+    }, (msg)=>
+      if msg.data and msg.data.objects
+        objectList = Object.keys(msg.data.objects)
+        
+        # Console log everything nicely
+        console.log("=== ALL OBJECTS ===")
+        console.log("Total objects:", objectList.length)
+        for objId in objectList
+          obj = msg.data.objects[objId]
+          console.log("#{objId}:", obj)
+        console.log("=== END ALL OBJECTS ===")
+        
+        output = "=== ALL OBJECTS (#{objectList.length}) ===\n\n"
+        
+        for objId in objectList
+          obj = msg.data.objects[objId]
+          output += "#{objId.toUpperCase()}\n"
+          output += "  Shape: #{obj.shape}\n"
+          output += "  Position: x=#{obj.position?.x || 0}, y=#{obj.position?.y || 0}\n"
+          
+          if obj.shape == "rectangle" and obj.size
+            output += "  Size: #{obj.size.width} x #{obj.size.height}\n"
+            output += "  Usage: rect(#{obj.position?.x || 0}, #{obj.position?.y || 0}, #{obj.size.width}, #{obj.size.height})\n"
+          else if obj.shape == "circle" and obj.radius
+            output += "  Radius: #{obj.radius}\n"
+            output += "  Usage: circle(#{obj.position?.x || 0}, #{obj.position?.y || 0}, #{obj.radius})\n"
+          
+          output += "  Class: #{obj.class || 'none'}\n"
+          output += "  Components: #{obj.components?.join(', ') || 'none'}\n"
+          
+          if obj.variableValues?.visual?.color
+            output += "  Color: #{obj.variableValues.visual.color}\n"
+            
+          output += "\n"
+        
+        output += "--- Quick Reference ---\n"
+        output += "draw_object(\"object_id\")\n"
+        output += "get_object(\"object_id\")\n"
+        output += "get_all_objects()\n"
+        
+        resultDiv.textContent = output
+      else
+        console.log("No objects found in response:", msg.data)
+        resultDiv.textContent = "No objects found in db.json\n\nMake sure the server is running and db.json exists."
 
   createSprite:(name,img,callback)->
     @checkSave true,()=>
@@ -707,4 +903,3 @@ class @SpriteEditor extends Manager
   renameItem:(item,name)->
     @app.project.changeSpriteName item.name,name # needed to trigger updating of maps
     super(item,name)
-  

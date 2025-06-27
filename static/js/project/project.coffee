@@ -245,6 +245,60 @@ class @Project
     @notifyListeners "spritelist"
     sprite
 
+  importComponentData:(callback)->
+    @app.client.sendRequest
+      name: "read_component_data"
+    , (msg)=>
+      if msg.data
+        @processComponentData(msg.data)
+        callback() if callback?
+
+  processComponentData:(data)->
+    if data.objects
+      @generateComponentCode(data)
+
+  generateComponentCode:(data)->
+    # Generate simple drawing calls from db.json
+    codeLines = []
+    
+    if data.objects
+      for objectName, objectData of data.objects
+        x = objectData.position?.x || 0
+        y = objectData.position?.y || 0
+        
+        if objectData.shape == "rectangle" and objectData.size
+          codeLines.push "drawSprite('#{objectName}',#{x}, #{y}, #{objectData.size.width}, #{objectData.size.height})"
+        else if objectData.shape == "circle" and objectData.radius
+          codeLines.push "drawSprite('#{objectName}',#{x}, #{y}, #{objectData.size.width}, #{objectData.size.height})"
+    
+    # Insert the code into the main file
+    @insertCodeIntoMainFile(codeLines.join("\n"))
+
+  insertCodeIntoMainFile:(code)->
+    # Find or create the main microScript file
+    mainFile = @getSource("main")
+    if not mainFile
+      mainFile = @createSource("main")
+    
+    # Get current content and append the generated code
+    currentContent = mainFile.content || ""
+    if currentContent.length > 0 and not currentContent.endsWith("\n")
+      currentContent += "\n"
+    
+    newContent = currentContent + "\n" + code
+    
+    # Update the file content
+    mainFile.content = newContent
+    @app.editor.setCode(newContent)
+    
+    # Save the file
+    @app.client.sendRequest {
+      name: "write_project_file"
+      project: @id
+      file: "ms/main.ms"
+      content: newContent
+    }
+
   addSource:(file)->
     s = new ProjectSource @,file.file,file.size
     @source_table[s.name] = s
