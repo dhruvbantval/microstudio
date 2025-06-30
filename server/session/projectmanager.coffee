@@ -469,10 +469,9 @@ class @ProjectManager
             d[d.length-1] += "-#{end}"
             dest = d.join("/")
 
-          if dest.endsWith ".js" then dest = dest.replace(".js",".ms")
           if dest.endsWith ".py" then dest = dest.replace(".py",".ms")
           if dest.endsWith ".lua" then dest = dest.replace(".lua",".ms")
-          type = if dest.split(".")[1] in ["ms","json","md","txt","csv"] then "string" else "nodebuffer"
+          type = if dest.split(".")[1] in ["ms","js","json","md","txt","csv"] then "string" else "nodebuffer"
           try
             contents.file(filename).async(type).then ((fileContent)=>
               if fileContent?

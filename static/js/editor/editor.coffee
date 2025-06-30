@@ -10,7 +10,7 @@ class @Editor extends Manager
     @list_change_event = "sourcelist"
     @get_item = "getSource"
     @use_thumbnails = false
-    @extensions = ["ms"]
+    @extensions = ["ms", "js"]
     @update_list = "updateSourceList"
     @file_icon = "fa fa-file"
 
@@ -182,7 +182,9 @@ class @Editor extends Manager
     @save_time = Date.now()
     @app.project.addPendingChange @
     if @selected_source?
-      @app.project.lockFile "ms/#{@selected_source}.ms"
+      source = @app.project.getSource @selected_source
+      ext = if source? then source.ext else "ms"
+      @app.project.lockFile "ms/#{@selected_source}.#{ext}"
       source = @app.project.getSource @selected_source
       if source?
         source.content = @getCode()
@@ -221,10 +223,13 @@ class @Editor extends Manager
     @keydown_count = 0
     @lines_of_code = 0
 
+    # Use the correct file extension based on the source file
+    ext = if source? then source.ext else "ms"
+    
     @app.client.sendRequest {
       name: "write_project_file"
       project: @app.project.id
-      file: "ms/#{@selected_source}.ms"
+      file: "ms/#{@selected_source}.#{ext}"
       characters: keycount
       lines: lines
       content: @getCode()
@@ -552,6 +557,16 @@ class @Editor extends Manager
 
     if @selected_source?
       @updateSourceLanguage()
+      
+      # Check if this is a JavaScript file and set syntax highlighting accordingly
+      source = @app.project.getSource(@selected_source)
+      if source? and source.filename.endsWith(".js")
+        if @language != @app.languages.javascript
+          @language = @app.languages.javascript
+          @editor.getSession().setMode(@language.ace_mode)
+      else
+        # Reset to project language for non-JS files
+        @updateLanguage()
 
     if @selected_source?
       source = @app.project.getSource(@selected_source)
@@ -601,12 +616,15 @@ class @Editor extends Manager
     lock = document.getElementById("editor-locked")
 
     if @selected_source?
-      if @app.project.isLocked("ms/#{@selected_source}.ms")
+      source = @app.project.getSource(@selected_source)
+      ext = if source? then source.ext else "ms"
+      lockKey = "ms/#{@selected_source}.#{ext}"
+      
+      if @app.project.isLocked(lockKey)
         @editor.setReadOnly true
-        user = @app.project.isLocked("ms/#{@selected_source}.ms").user
+        user = @app.project.isLocked(lockKey).user
         @showLock "<i class='fa fa-user'></i> Locked by #{user}",@app.appui.createFriendColor(user)
       else
-        source = @app.project.getSource(@selected_source)
         if source? and not source.fetched
           @editor.setReadOnly true
           @showLock """<i class="fas fa-spinner fa-spin"></i> """+@app.translator.get("Loading..."),"hsl(200,50%,50%)"

@@ -660,16 +660,13 @@
               d[d.length - 1] += `-${end}`;
               dest = d.join("/");
             }
-            if (dest.endsWith(".js")) {
-              dest = dest.replace(".js", ".ms");
-            }
             if (dest.endsWith(".py")) {
               dest = dest.replace(".py", ".ms");
             }
             if (dest.endsWith(".lua")) {
               dest = dest.replace(".lua", ".ms");
             }
-            type = (ref = dest.split(".")[1]) === "ms" || ref === "json" || ref === "md" || ref === "txt" || ref === "csv" ? "string" : "nodebuffer";
+            type = (ref = dest.split(".")[1]) === "ms" || ref === "js" || ref === "json" || ref === "md" || ref === "txt" || ref === "csv" ? "string" : "nodebuffer";
             try {
               return contents.file(filename).async(type).then(((fileContent) => {
                 if (fileContent != null) {

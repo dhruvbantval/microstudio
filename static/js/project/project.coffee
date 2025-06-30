@@ -269,25 +269,37 @@ class @Project
     console.info "Starting component code generation..."
     console.info "Data received:", data
     
-    # Check project language and warn if needed
-    if @language != "javascript"
-      console.warn "⚠️ Project language is set to '#{@language}'. For JavaScript files, consider changing project language to 'javascript' in project settings."
-    
-    # Generate all three files
-    console.info "Generating component_data.js..."
-    @generateComponentDataFile(data)
-    
-    console.info "Generating functions.js..."
-    @generateFunctionsLibrary(data)
-    
-    console.info "Generating main.js..."
-    @generateMainFileTemplate()
+    # Check project language
+    if @language == "javascript"
+      console.info "✅ Project language is JavaScript - generating .js files"
+      # Generate all three files as .js files
+      console.info "Generating component_data.js..."
+      @generateComponentDataFile(data)
+      
+      console.info "Generating functions.js..."
+      @generateFunctionsLibrary(data)
+      
+      console.info "Generating main.js..."
+      @generateMainFileTemplate()
+    else
+      console.warn "⚠️ Project language is '#{@language}' - generating microScript-compatible .ms files"
+      # Generate microScript-compatible versions as .ms files
+      console.info "Generating component_data.ms..."
+      @generateMicroScriptComponentDataFile(data)
+      
+      console.info "Generating functions.ms..."
+      @generateMicroScriptFunctionsLibrary(data)
+      
+      console.info "Generating main.ms..."
+      @generateMicroScriptMainFileTemplate()
     
     # Show success message after a short delay to ensure files are created
     setTimeout ()=>
-      console.info "Component system files generated successfully!"
-      if @language != "javascript"
-        console.info "💡 Tip: Change project language to 'JavaScript' in project settings for better syntax highlighting"
+      if @language == "javascript"
+        console.info "✅ JavaScript component system files generated successfully!"
+      else
+        console.info "✅ microScript component system files generated successfully!"
+        console.info "💡 Tip: Change project language to 'JavaScript' in project settings for better JavaScript support"
     , 1000
 
   generateComponentDataFile:(data)->
@@ -295,11 +307,11 @@ class @Project
     codeLines = []
     codeLines.push "// Component data from db.json"
     codeLines.push "// This object is globally available across all files in microStudio"
-    codeLines.push "const component_objects = {"
-    
+    codeLines.push "component_objects = {"
+
     # Use entities if available, fallback to objects for backwards compatibility
     objectsData = data.entities || data.objects
-    
+
     if objectsData
       objectEntries = []
       for objectName, objectData of objectsData
@@ -347,111 +359,215 @@ class @Project
     lines = []
     lines.push "// Component Functions Library"
     lines.push "// All functions are globally available across files in microStudio"
+    lines.push "drawObject = function(id, customX, customY) {"
+    lines.push "  var obj = component_objects[id];"
+    lines.push "  if (!obj) {"
+    lines.push "    // Debug: Object not found"
+    lines.push "    return;"
+    lines.push "  }"
     lines.push ""
-    
-    # Core drawing functions
-    lines.push "function drawObject(id, customX, customY) {"
-    lines.push "  if (component_objects[id]) {"
-    lines.push "    const obj = component_objects[id];"
-    lines.push "    const x = customX !== undefined ? customX : obj.x;"
-    lines.push "    const y = customY !== undefined ? customY : obj.y;"
+    lines.push "  var x = customX !== undefined ? customX : obj.x;"
+    lines.push "  var y = customY !== undefined ? customY : obj.y;"
+    lines.push ""
+    lines.push "  // Debug: Log what we're trying to draw"
+    lines.push "  // Temporarily commented out to avoid spam: print('Drawing object: ' + id + ' at (' + x + ', ' + y + ')');"
+    lines.push ""
+    lines.push "  if (obj.color) screen.setColor(obj.color);"
+    lines.push ""
+    lines.push "  // Try to draw sprite with object ID as sprite name"
+    lines.push "  try {"
+    lines.push "    screen.drawSprite(id, x, y);"
+    lines.push "  } catch (e) {"
+    lines.push "    // If sprite doesn't exist, draw a simple rectangle as fallback"
+    lines.push "    var w = obj.w || 20;"
+    lines.push "    var h = obj.h || 20;"
+    lines.push "    var r = obj.r || 10;"
     lines.push "    "
-    lines.push "    if (obj.color) screen.setDrawColor(obj.color);"
+    lines.push "    screen.setColor(obj.color || '#FF0000');"
     lines.push "    "
-    lines.push "    if (obj.shape === 'rectangle') {"
-    lines.push "      screen.fillRect(x, y, obj.w, obj.h);"
-    lines.push "    } else if (obj.shape === 'circle') {"
-    lines.push "      screen.fillRound(x, y, obj.r * 2, obj.r * 2);"
+    lines.push "    if (obj.shape === 'circle') {"
+    lines.push "      screen.fillRound(x, y, r, r);"
+    lines.push "    } else {"
+    lines.push "      screen.fillRect(x, y, w, h);"
     lines.push "    }"
     lines.push "  }"
     lines.push "}"
     lines.push ""
-    
-    # Component system functions
-    lines.push "function applyPhysics(id, dt) {"
-    lines.push "  if (component_objects[id] && component_objects[id].data && component_objects[id].data.physics) {"
-    lines.push "    const obj = component_objects[id];"
-    lines.push "    const physics = obj.data.physics;"
-    lines.push "    "
-    lines.push "    // Apply gravity"
+    lines.push "applyPhysics = function(id, dt) {"
+    lines.push "  var obj = component_objects[id];"
+    lines.push "  if (obj && obj.data && obj.data.physics) {"
+    lines.push "    var physics = obj.data.physics;"
+    lines.push ""
     lines.push "    if (physics.gravity) obj.y += physics.gravity * dt;"
-    lines.push "    "
-    lines.push "    // Apply friction (simple implementation)"
-    lines.push "    if (physics.friction && obj.velocity_x) {"
+    lines.push ""
+    lines.push "    if (physics.friction && obj.velocity_x !== undefined) {"
     lines.push "      obj.velocity_x *= (1 - physics.friction * dt);"
     lines.push "    }"
     lines.push "  }"
     lines.push "}"
     lines.push ""
-    
-    lines.push "function applyAllPhysics(dt) {"
-    lines.push "  for (const id of Object.keys(component_objects)) {"
-    lines.push "    applyPhysics(id, dt);"
+    lines.push "applyAllPhysics = function(dt) {"
+    lines.push "  var keys = Object.keys(component_objects);"
+    lines.push "  for (var i = 0; i < keys.length; i++) {"
+    lines.push "    applyPhysics(keys[i], dt);"
     lines.push "  }"
     lines.push "}"
     lines.push ""
-    
-    # Utility functions
-    lines.push "function getObject(id) {"
+    lines.push "getObject = function(id) {"
     lines.push "  return component_objects[id];"
     lines.push "}"
     lines.push ""
-    
-    lines.push "function getObjectsWithComponent(componentName) {"
-    lines.push "  const result = [];"
-    lines.push "  for (const id of Object.keys(component_objects)) {"
-    lines.push "    const obj = component_objects[id];"
+    lines.push "getObjectsWithComponent = function(componentName) {"
+    lines.push "  var result = [];"
+    lines.push "  var keys = Object.keys(component_objects);"
+    lines.push "  for (var i = 0; i < keys.length; i++) {"
+    lines.push "    var obj = component_objects[keys[i]];"
     lines.push "    if (obj.components && obj.components.indexOf(componentName) >= 0) {"
-    lines.push "      result.push(id);"
+    lines.push "      result.push(keys[i]);"
     lines.push "    }"
     lines.push "  }"
     lines.push "  return result;"
     lines.push "}"
     lines.push ""
-    
-    lines.push "function drawAllObjects() {"
-    lines.push "  for (const id of Object.keys(component_objects)) {"
-    lines.push "    drawObject(id);"
+    lines.push "drawAllObjects = function() {"
+    lines.push "  var keys = Object.keys(component_objects);"
+    lines.push "  for (var i = 0; i < keys.length; i++) {"
+    lines.push "    drawObject(keys[i]);"
     lines.push "  }"
     lines.push "}"
-    lines.push ""
-    
-    # Example usage
-    lines.push "/* Example usage in main.js:"
-    lines.push "function init() {"
-    lines.push "  // Setup complete - component_objects and all functions are available"
-    lines.push "}"
-    lines.push ""
-    lines.push "function update() {"
-    lines.push "  applyAllPhysics(1/60);  // 60 FPS"
-    lines.push "}"
-    lines.push ""
-    lines.push "function draw() {"
-    lines.push "  screen.clear();"
-    lines.push "  drawAllObjects();"
-    lines.push "}"
-    lines.push "*/"
     
     @insertCodeIntoFile(lines.join("\n"), "functions", "js")
 
-  generateMainFileTemplate:->
+  generateMicroScriptComponentDataFile:(data)->
+    # Generate clean component data in microScript format for microStudio
+    codeLines = []
+    codeLines.push "// Component data from db.json"
+    codeLines.push "// This object is globally available across all files in microStudio"
+    codeLines.push "component_objects = object"
+
+    # Use entities if available, fallback to objects for backwards compatibility
+    objectsData = data.entities || data.objects
+    if objectsData
+      for objectName, objectData of objectsData
+        codeLines.push "  #{objectName} = object"
+        codeLines.push "    shape = \"#{objectData.shape}\""
+        codeLines.push "    x = #{objectData.position?.x || 0}"
+        codeLines.push "    y = #{objectData.position?.y || 0}"
+        
+        if objectData.shape == "rectangle" and objectData.size
+          codeLines.push "    w = #{objectData.size.width}"
+          codeLines.push "    h = #{objectData.size.height}"
+        else if objectData.shape == "circle" and objectData.radius
+          codeLines.push "    r = #{objectData.radius}"
+        
+        if objectData.variableValues?.visual?.color
+          codeLines.push "    color = \"#{objectData.variableValues.visual.color}\""
+        
+        if objectData.components and objectData.components.length > 0
+          codeLines.push "    components = #{JSON.stringify(objectData.components)}"
+        
+        if objectData.variableValues
+          codeLines.push "    data = object"
+          for component, values of objectData.variableValues
+            codeLines.push "      #{component} = object"
+            for key, value of values
+              if typeof value == "string"
+                codeLines.push "        #{key} = \"#{value}\""
+              else
+                codeLines.push "        #{key} = #{JSON.stringify(value)}"
+            codeLines.push "      end"
+          codeLines.push "    end"
+        
+        codeLines.push "  end"
+
+    codeLines.push "end"
+    @insertCodeIntoFile(codeLines.join("\n"), "component_data", "ms")
+
+  generateMicroScriptFunctionsLibrary:(data)->
+    # Generate functions library in microScript for microStudio
+    lines = []
+    lines.push "// Component Functions Library"
+    lines.push "// All functions are globally available across files in microStudio"
+    lines.push ""
+    lines.push "drawObject = function(id, customX, customY)"
+    lines.push "  obj = component_objects[id]"
+    lines.push "  if not obj then return end"
+    lines.push ""
+    lines.push "  x = if customX != null then customX else obj.x end"
+    lines.push "  y = if customY != null then customY else obj.y end"
+    lines.push ""
+    lines.push "  if obj.color then screen.setColor(obj.color) end"
+    lines.push ""
+    lines.push "  // Use object ID as sprite name"
+    lines.push "  screen.drawSprite(id, x, y)"
+    lines.push "end"
+    lines.push ""
+    lines.push "applyPhysics = function(id, dt)"
+    lines.push "  obj = component_objects[id]"
+    lines.push "  if obj and obj.data and obj.data.physics then"
+    lines.push "    physics = obj.data.physics"
+    lines.push ""
+    lines.push "    if physics.gravity then obj.y += physics.gravity * dt end"
+    lines.push ""
+    lines.push "    if physics.friction and obj.velocity_x != null then"
+    lines.push "      obj.velocity_x *= (1 - physics.friction * dt)"
+    lines.push "    end"
+    lines.push "  end"
+    lines.push "end"
+    lines.push ""
+    lines.push "applyAllPhysics = function(dt)"
+    lines.push "  for id in system.keys(component_objects)"
+    lines.push "    applyPhysics(id, dt)"
+    lines.push "  end"
+    lines.push "end"
+    lines.push ""
+    lines.push "getObject = function(id)"
+    lines.push "  return component_objects[id]"
+    lines.push "end"
+    lines.push ""
+    lines.push "getObjectsWithComponent = function(componentName)"
+    lines.push "  result = []"
+    lines.push "  for id in system.keys(component_objects)"
+    lines.push "    obj = component_objects[id]"
+    lines.push "    if obj.components and obj.components.indexOf(componentName) >= 0 then"
+    lines.push "      result.push(id)"
+    lines.push "    end"
+    lines.push "  end"
+    lines.push "  return result"
+    lines.push "end"
+    lines.push ""
+    lines.push "drawAllObjects = function()"
+    lines.push "  for id in system.keys(component_objects)"
+    lines.push "    drawObject(id)"
+    lines.push "  end"
+    lines.push "end"
+    @insertCodeIntoFile(lines.join("\n"), "functions", "ms")
+  generateMainFileTemplate:()->
     # Generate a clean main.js template for microStudio
     lines = []
     lines.push "// Main game logic - uses component_objects and functions from other files"
     lines.push "// In microStudio, all files are automatically available globally"
     lines.push ""
-    lines.push "function init() {"
+    lines.push "init = function() {"
     lines.push "  // Initialization code here"
-    lines.push "  console.log('Component system initialized with', Object.keys(component_objects).length, 'objects');"
+    lines.push "  // Debug: Check if component system is working"
+    lines.push "  if (typeof component_objects !== 'undefined') {"
+    lines.push "    // Component system initialized successfully"
+    lines.push "  } else {"
+    lines.push "    // Component system not found"
+    lines.push "  }"
     lines.push "}"
     lines.push ""
-    lines.push "function update() {"
+    lines.push "update = function() {"
     lines.push "  // Update physics and game logic"
     lines.push "  applyAllPhysics(1/60);  // 60 FPS"
     lines.push "}"
     lines.push ""
-    lines.push "function draw() {"
+    lines.push "draw = function() {"
     lines.push "  screen.clear();"
+    lines.push "  "
+    lines.push "  // Set white color for drawing"
+    lines.push "  screen.setColor('#FFFFFF');"
     lines.push "  "
     lines.push "  // Draw all objects"
     lines.push "  drawAllObjects();"
@@ -460,7 +576,6 @@ class @Project
     lines.push "  // drawObject('rect1');"
     lines.push "  // drawObject('circle1', 150, 200);  // custom position"
     lines.push "}"
-    
     @insertCodeIntoFile(lines.join("\n"), "main", "js")
 
   addSource:(file)->

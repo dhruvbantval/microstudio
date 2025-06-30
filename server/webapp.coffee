@@ -442,7 +442,7 @@ class @WebApp
           res.send buffer
 
     # source files for player
-    @app.get /^\/[^\/\|\?\&\.]+\/[^\/\|\?\&\.]+(\/([^\/\|\?\&\.]+)?)?\/ms\/[A-Za-z0-9_-]+.ms$/,(req,res)=>
+    @app.get /^\/[^\/\|\?\&\.]+\/[^\/\|\?\&\.]+(\/([^\/\|\?\&\.]+)?)?\/ms\/[A-Za-z0-9_-]+\.(ms|js)$/,(req,res)=>
       s = req.path.split("/")
       access = @getProjectAccess req,res
       return if not access?
