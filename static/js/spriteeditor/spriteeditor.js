@@ -459,12 +459,22 @@
     importComponentData() {
       if (this.app.project) {
         return this.app.project.importComponentData(() => {
-          this.app.appui.showNotification("Component objects imported to main.ms!");
-          this.createObjectQueryUI();
-          // Switch to code editor to show the imported code
-          if (this.app.editor) {
-            return this.app.setSection("code");
-          }
+          this.app.appui.showNotification("Creating microStudio JavaScript files...");
+          
+          // Show success message after files are created
+          return setTimeout(() => {
+            var ref;
+            this.app.appui.showNotification("✅ JavaScript files created! Check the Code section for: component_data.js, functions.js, main.js");
+            this.createObjectQueryUI();
+            // Switch to code editor to show the imported code
+            if ((ref = this.app.appui) != null ? ref.setSection : void 0) {
+              return this.app.appui.setSection("code");
+            } else if (this.app.setSection) {
+              return this.app.setSection("code");
+            } else {
+              return console.info("Navigate to Code section to see the generated files");
+            }
+          }, 2000);
         });
       }
     }
@@ -552,62 +562,69 @@ box-shadow: 0 4px 8px rgba(0,0,0,0.3);`;
       return this.app.client.sendRequest({
         name: "read_component_data"
       }, (msg) => {
-        var component, key, objectData, output, ref, ref1, ref2, ref3, ref4, ref5, ref6, ref7, ref8, value, values;
-        if (msg.data && msg.data.objects && msg.data.objects[objectId]) {
-          objectData = msg.data.objects[objectId];
-          
-          // Console log the data nicely
-          console.log(`=== OBJECT DATA FOR '${objectId}' ===`);
-          console.log("Shape:", objectData.shape);
-          console.log("Position:", objectData.position);
-          if (objectData.shape === "rectangle") {
-            console.log("Size:", objectData.size);
-          } else if (objectData.shape === "circle") {
-            console.log("Radius:", objectData.radius);
-          }
-          console.log("Class:", objectData.class);
-          console.log("Components:", objectData.components);
-          console.log("Variable Values:", objectData.variableValues);
-          console.log("Full Object:", objectData);
-          console.log("=== END ===");
-          
-          // Format the output for display
-          output = `=== ${objectId.toUpperCase()} ===\n\n`;
-          output += `Shape: ${objectData.shape}\n`;
-          output += `Position: x=${((ref = objectData.position) != null ? ref.x : void 0) || 0}, y=${((ref1 = objectData.position) != null ? ref1.y : void 0) || 0}\n`;
-          if (objectData.shape === "rectangle" && objectData.size) {
-            output += `Dimensions: ${objectData.size.width} x ${objectData.size.height}\n`;
-            output += `Usage: rect(${((ref2 = objectData.position) != null ? ref2.x : void 0) || 0}, ${((ref3 = objectData.position) != null ? ref3.y : void 0) || 0}, ${objectData.size.width}, ${objectData.size.height})\n`;
-          } else if (objectData.shape === "circle" && objectData.radius) {
-            output += `Radius: ${objectData.radius}\n`;
-            output += `Usage: circle(${((ref4 = objectData.position) != null ? ref4.x : void 0) || 0}, ${((ref5 = objectData.position) != null ? ref5.y : void 0) || 0}, ${objectData.radius})\n`;
-          }
-          output += `\nClass: ${objectData.class || 'none'}\n`;
-          output += `Components: ${((ref6 = objectData.components) != null ? ref6.join(', ') : void 0) || 'none'}\n`;
-          if (objectData.variableValues) {
-            output += "\n--- Component Data ---\n";
-            ref7 = objectData.variableValues;
-            for (component in ref7) {
-              values = ref7[component];
-              output += `${component}:\n`;
-              for (key in values) {
-                value = values[key];
-                output += `  • ${key}: ${JSON.stringify(value)}\n`;
+        var availableObjects, component, key, objectData, objectsData, output, ref, ref1, ref2, ref3, ref4, ref5, ref6, ref7, value, values;
+        if (msg.data) {
+          // Handle both entities and objects data structures
+          objectsData = msg.data.entities || msg.data.objects;
+          if (objectsData && objectsData[objectId]) {
+            objectData = objectsData[objectId];
+            
+            // Console log the data nicely
+            console.log(`=== OBJECT DATA FOR '${objectId}' ===`);
+            console.log("Shape:", objectData.shape);
+            console.log("Position:", objectData.position);
+            if (objectData.shape === "rectangle") {
+              console.log("Size:", objectData.size);
+            } else if (objectData.shape === "circle") {
+              console.log("Radius:", objectData.radius);
+            }
+            console.log("Class:", objectData.class);
+            console.log("Components:", objectData.components);
+            console.log("Variable Values:", objectData.variableValues);
+            console.log("Full Object:", objectData);
+            console.log("=== END ===");
+            
+            // Format the output for display
+            output = `=== ${objectId.toUpperCase()} ===\n\n`;
+            output += `Shape: ${objectData.shape}\n`;
+            output += `Position: x=${((ref = objectData.position) != null ? ref.x : void 0) || 0}, y=${((ref1 = objectData.position) != null ? ref1.y : void 0) || 0}\n`;
+            if (objectData.shape === "rectangle" && objectData.size) {
+              output += `Dimensions: ${objectData.size.width} x ${objectData.size.height}\n`;
+              output += `Usage: rect(${((ref2 = objectData.position) != null ? ref2.x : void 0) || 0}, ${((ref3 = objectData.position) != null ? ref3.y : void 0) || 0}, ${objectData.size.width}, ${objectData.size.height})\n`;
+            } else if (objectData.shape === "circle" && objectData.radius) {
+              output += `Radius: ${objectData.radius}\n`;
+              output += `Usage: circle(${((ref4 = objectData.position) != null ? ref4.x : void 0) || 0}, ${((ref5 = objectData.position) != null ? ref5.y : void 0) || 0}, ${objectData.radius})\n`;
+            }
+            output += `\nClass: ${objectData.class || 'none'}\n`;
+            output += `Components: ${((ref6 = objectData.components) != null ? ref6.join(', ') : void 0) || 'none'}\n`;
+            if (objectData.variableValues) {
+              output += "\n--- Component Data ---\n";
+              ref7 = objectData.variableValues;
+              for (component in ref7) {
+                values = ref7[component];
+                output += `${component}:\n`;
+                for (key in values) {
+                  value = values[key];
+                  output += `  • ${key}: ${JSON.stringify(value)}\n`;
+                }
               }
             }
-          }
-          output += "\n--- Code Examples ---\n";
-          output += `draw_object(\"${objectId}\")\n`;
-          output += `data = get_object(\"${objectId}\")\n`;
-          if (objectData.shape === "rectangle") {
-            output += `draw_object(\"${objectId}\", 100, 50)  // custom position`;
+            output += "\n--- Code Examples ---\n";
+            output += `drawObject(\"${objectId}\")\n`;
+            output += `data = getObject(\"${objectId}\")\n`;
+            if (objectData.shape === "rectangle") {
+              output += `drawObject(\"${objectId}\", 100, 50)  // custom position`;
+            } else {
+              output += `drawObject(\"${objectId}\", 200, 150)  // custom position`;
+            }
+            return resultDiv.textContent = output;
           } else {
-            output += `draw_object(\"${objectId}\", 200, 150)  // custom position`;
+            console.log(`Object '${objectId}' not found in data:`, msg.data);
+            availableObjects = objectsData ? Object.keys(objectsData).join(', ') : 'none';
+            return resultDiv.textContent = `Object '${objectId}' not found\n\nAvailable objects:\n${availableObjects}`;
           }
-          return resultDiv.textContent = output;
         } else {
-          console.log(`Object '${objectId}' not found in data:`, msg.data);
-          return resultDiv.textContent = `Object '${objectId}' not found\n\nAvailable objects:\n${((ref8 = msg.data) != null ? ref8.objects : void 0) ? Object.keys(msg.data.objects).join(', ') : 'none'}`;
+          return resultDiv.textContent = "No data received from server";
         }
       });
     }
@@ -620,48 +637,54 @@ box-shadow: 0 4px 8px rgba(0,0,0,0.3);`;
       return this.app.client.sendRequest({
         name: "read_component_data"
       }, (msg) => {
-        var l, len, len1, o, obj, objId, objectList, output, ref, ref1, ref2, ref3, ref4, ref5, ref6, ref7, ref8;
-        if (msg.data && msg.data.objects) {
-          objectList = Object.keys(msg.data.objects);
-          
-          // Console log everything nicely
-          console.log("=== ALL OBJECTS ===");
-          console.log("Total objects:", objectList.length);
-          for (l = 0, len = objectList.length; l < len; l++) {
-            objId = objectList[l];
-            obj = msg.data.objects[objId];
-            console.log(`${objId}:`, obj);
-          }
-          console.log("=== END ALL OBJECTS ===");
-          output = `=== ALL OBJECTS (${objectList.length}) ===\n\n`;
-          for (o = 0, len1 = objectList.length; o < len1; o++) {
-            objId = objectList[o];
-            obj = msg.data.objects[objId];
-            output += `${objId.toUpperCase()}\n`;
-            output += `  Shape: ${obj.shape}\n`;
-            output += `  Position: x=${((ref = obj.position) != null ? ref.x : void 0) || 0}, y=${((ref1 = obj.position) != null ? ref1.y : void 0) || 0}\n`;
-            if (obj.shape === "rectangle" && obj.size) {
-              output += `  Size: ${obj.size.width} x ${obj.size.height}\n`;
-              output += `  Usage: rect(${((ref2 = obj.position) != null ? ref2.x : void 0) || 0}, ${((ref3 = obj.position) != null ? ref3.y : void 0) || 0}, ${obj.size.width}, ${obj.size.height})\n`;
-            } else if (obj.shape === "circle" && obj.radius) {
-              output += `  Radius: ${obj.radius}\n`;
-              output += `  Usage: circle(${((ref4 = obj.position) != null ? ref4.x : void 0) || 0}, ${((ref5 = obj.position) != null ? ref5.y : void 0) || 0}, ${obj.radius})\n`;
+        var l, len, len1, o, obj, objId, objectList, objectsData, output, ref, ref1, ref2, ref3, ref4, ref5, ref6, ref7, ref8;
+        if (msg.data) {
+          // Handle both entities and objects data structures
+          objectsData = msg.data.entities || msg.data.objects;
+          if (objectsData) {
+            objectList = Object.keys(objectsData);
+            
+            // Console log everything nicely
+            console.log("=== ALL OBJECTS ===");
+            console.log("Total objects:", objectList.length);
+            for (l = 0, len = objectList.length; l < len; l++) {
+              objId = objectList[l];
+              obj = objectsData[objId];
+              console.log(`${objId}:`, obj);
             }
-            output += `  Class: ${obj.class || 'none'}\n`;
-            output += `  Components: ${((ref6 = obj.components) != null ? ref6.join(', ') : void 0) || 'none'}\n`;
-            if ((ref7 = obj.variableValues) != null ? (ref8 = ref7.visual) != null ? ref8.color : void 0 : void 0) {
-              output += `  Color: ${obj.variableValues.visual.color}\n`;
+            console.log("=== END ALL OBJECTS ===");
+            output = `=== ALL OBJECTS (${objectList.length}) ===\n\n`;
+            for (o = 0, len1 = objectList.length; o < len1; o++) {
+              objId = objectList[o];
+              obj = objectsData[objId];
+              output += `${objId.toUpperCase()}\n`;
+              output += `  Shape: ${obj.shape}\n`;
+              output += `  Position: x=${((ref = obj.position) != null ? ref.x : void 0) || 0}, y=${((ref1 = obj.position) != null ? ref1.y : void 0) || 0}\n`;
+              if (obj.shape === "rectangle" && obj.size) {
+                output += `  Size: ${obj.size.width} x ${obj.size.height}\n`;
+                output += `  Usage: rect(${((ref2 = obj.position) != null ? ref2.x : void 0) || 0}, ${((ref3 = obj.position) != null ? ref3.y : void 0) || 0}, ${obj.size.width}, ${obj.size.height})\n`;
+              } else if (obj.shape === "circle" && obj.radius) {
+                output += `  Radius: ${obj.radius}\n`;
+                output += `  Usage: circle(${((ref4 = obj.position) != null ? ref4.x : void 0) || 0}, ${((ref5 = obj.position) != null ? ref5.y : void 0) || 0}, ${obj.radius})\n`;
+              }
+              output += `  Class: ${obj.class || 'none'}\n`;
+              output += `  Components: ${((ref6 = obj.components) != null ? ref6.join(', ') : void 0) || 'none'}\n`;
+              if ((ref7 = obj.variableValues) != null ? (ref8 = ref7.visual) != null ? ref8.color : void 0 : void 0) {
+                output += `  Color: ${obj.variableValues.visual.color}\n`;
+              }
+              output += "\n";
             }
-            output += "\n";
+            output += "--- Quick Reference ---\n";
+            output += "drawObject(\"object_id\")\n";
+            output += "getObject(\"object_id\")\n";
+            output += "drawAllObjects()\n";
+            return resultDiv.textContent = output;
+          } else {
+            console.log("No objects found in response:", msg.data);
+            return resultDiv.textContent = "No objects found in db.json\n\nMake sure the server is running and db.json exists.";
           }
-          output += "--- Quick Reference ---\n";
-          output += "draw_object(\"object_id\")\n";
-          output += "get_object(\"object_id\")\n";
-          output += "get_all_objects()\n";
-          return resultDiv.textContent = output;
         } else {
-          console.log("No objects found in response:", msg.data);
-          return resultDiv.textContent = "No objects found in db.json\n\nMake sure the server is running and db.json exists.";
+          return resultDiv.textContent = "No data received from server";
         }
       });
     }

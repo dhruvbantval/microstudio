@@ -354,11 +354,20 @@ class @SpriteEditor extends Manager
   importComponentData:()->
     if @app.project
       @app.project.importComponentData ()=>
-        @app.appui.showNotification("Component objects imported to main.ms!")
-        @createObjectQueryUI()
-        # Switch to code editor to show the imported code
-        if @app.editor
-          @app.setSection("code")
+        @app.appui.showNotification("Creating microStudio JavaScript files...")
+        
+        # Show success message after files are created
+        setTimeout ()=>
+          @app.appui.showNotification("✅ JavaScript files created! Check the Code section for: component_data.js, functions.js, main.js")
+          @createObjectQueryUI()
+          # Switch to code editor to show the imported code
+          if @app.appui?.setSection
+            @app.appui.setSection("code")
+          else if @app.setSection
+            @app.setSection("code")
+          else
+            console.info "Navigate to Code section to see the generated files"
+        , 2000
 
   createObjectQueryUI:()->
     # Create UI elements for querying object data
@@ -443,57 +452,64 @@ class @SpriteEditor extends Manager
     @app.client.sendRequest {
       name: "read_component_data"
     }, (msg)=>
-      if msg.data and msg.data.objects and msg.data.objects[objectId]
-        objectData = msg.data.objects[objectId]
+      if msg.data
+        # Handle both entities and objects data structures
+        objectsData = msg.data.entities || msg.data.objects
         
-        # Console log the data nicely
-        console.log("=== OBJECT DATA FOR '#{objectId}' ===")
-        console.log("Shape:", objectData.shape)
-        console.log("Position:", objectData.position)
-        if objectData.shape == "rectangle"
-          console.log("Size:", objectData.size)
-        else if objectData.shape == "circle"
-          console.log("Radius:", objectData.radius)
-        console.log("Class:", objectData.class)
-        console.log("Components:", objectData.components)
-        console.log("Variable Values:", objectData.variableValues)
-        console.log("Full Object:", objectData)
-        console.log("=== END ===")
-        
-        # Format the output for display
-        output = "=== #{objectId.toUpperCase()} ===\n\n"
-        output += "Shape: #{objectData.shape}\n"
-        output += "Position: x=#{objectData.position?.x || 0}, y=#{objectData.position?.y || 0}\n"
-        
-        if objectData.shape == "rectangle" and objectData.size
-          output += "Dimensions: #{objectData.size.width} x #{objectData.size.height}\n"
-          output += "Usage: rect(#{objectData.position?.x || 0}, #{objectData.position?.y || 0}, #{objectData.size.width}, #{objectData.size.height})\n"
-        else if objectData.shape == "circle" and objectData.radius
-          output += "Radius: #{objectData.radius}\n"
-          output += "Usage: circle(#{objectData.position?.x || 0}, #{objectData.position?.y || 0}, #{objectData.radius})\n"
-        
-        output += "\nClass: #{objectData.class || 'none'}\n"
-        output += "Components: #{objectData.components?.join(', ') || 'none'}\n"
-        
-        if objectData.variableValues
-          output += "\n--- Component Data ---\n"
-          for component, values of objectData.variableValues
-            output += "#{component}:\n"
-            for key, value of values
-              output += "  • #{key}: #{JSON.stringify(value)}\n"
-        
-        output += "\n--- Code Examples ---\n"
-        output += "draw_object(\"#{objectId}\")\n"
-        output += "data = get_object(\"#{objectId}\")\n"
-        if objectData.shape == "rectangle"
-          output += "draw_object(\"#{objectId}\", 100, 50)  // custom position"
+        if objectsData and objectsData[objectId]
+          objectData = objectsData[objectId]
+          
+          # Console log the data nicely
+          console.log("=== OBJECT DATA FOR '#{objectId}' ===")
+          console.log("Shape:", objectData.shape)
+          console.log("Position:", objectData.position)
+          if objectData.shape == "rectangle"
+            console.log("Size:", objectData.size)
+          else if objectData.shape == "circle"
+            console.log("Radius:", objectData.radius)
+          console.log("Class:", objectData.class)
+          console.log("Components:", objectData.components)
+          console.log("Variable Values:", objectData.variableValues)
+          console.log("Full Object:", objectData)
+          console.log("=== END ===")
+          
+          # Format the output for display
+          output = "=== #{objectId.toUpperCase()} ===\n\n"
+          output += "Shape: #{objectData.shape}\n"
+          output += "Position: x=#{objectData.position?.x || 0}, y=#{objectData.position?.y || 0}\n"
+          
+          if objectData.shape == "rectangle" and objectData.size
+            output += "Dimensions: #{objectData.size.width} x #{objectData.size.height}\n"
+            output += "Usage: rect(#{objectData.position?.x || 0}, #{objectData.position?.y || 0}, #{objectData.size.width}, #{objectData.size.height})\n"
+          else if objectData.shape == "circle" and objectData.radius
+            output += "Radius: #{objectData.radius}\n"
+            output += "Usage: circle(#{objectData.position?.x || 0}, #{objectData.position?.y || 0}, #{objectData.radius})\n"
+          
+          output += "\nClass: #{objectData.class || 'none'}\n"
+          output += "Components: #{objectData.components?.join(', ') || 'none'}\n"
+          
+          if objectData.variableValues
+            output += "\n--- Component Data ---\n"
+            for component, values of objectData.variableValues
+              output += "#{component}:\n"
+              for key, value of values
+                output += "  • #{key}: #{JSON.stringify(value)}\n"
+          
+          output += "\n--- Code Examples ---\n"
+          output += "drawObject(\"#{objectId}\")\n"
+          output += "data = getObject(\"#{objectId}\")\n"
+          if objectData.shape == "rectangle"
+            output += "drawObject(\"#{objectId}\", 100, 50)  // custom position"
+          else
+            output += "drawObject(\"#{objectId}\", 200, 150)  // custom position"
+          
+          resultDiv.textContent = output
         else
-          output += "draw_object(\"#{objectId}\", 200, 150)  // custom position"
-        
-        resultDiv.textContent = output
+          console.log("Object '#{objectId}' not found in data:", msg.data)
+          availableObjects = if objectsData then Object.keys(objectsData).join(', ') else 'none'
+          resultDiv.textContent = "Object '#{objectId}' not found\n\nAvailable objects:\n#{availableObjects}"
       else
-        console.log("Object '#{objectId}' not found in data:", msg.data)
-        resultDiv.textContent = "Object '#{objectId}' not found\n\nAvailable objects:\n#{if msg.data?.objects then Object.keys(msg.data.objects).join(', ') else 'none'}"
+        resultDiv.textContent = "No data received from server"
 
   listAllObjects:()->
     resultDiv = document.getElementById("object-query-result")
@@ -502,49 +518,55 @@ class @SpriteEditor extends Manager
     @app.client.sendRequest {
       name: "read_component_data"
     }, (msg)=>
-      if msg.data and msg.data.objects
-        objectList = Object.keys(msg.data.objects)
+      if msg.data
+        # Handle both entities and objects data structures
+        objectsData = msg.data.entities || msg.data.objects
         
-        # Console log everything nicely
-        console.log("=== ALL OBJECTS ===")
-        console.log("Total objects:", objectList.length)
-        for objId in objectList
-          obj = msg.data.objects[objId]
-          console.log("#{objId}:", obj)
-        console.log("=== END ALL OBJECTS ===")
-        
-        output = "=== ALL OBJECTS (#{objectList.length}) ===\n\n"
-        
-        for objId in objectList
-          obj = msg.data.objects[objId]
-          output += "#{objId.toUpperCase()}\n"
-          output += "  Shape: #{obj.shape}\n"
-          output += "  Position: x=#{obj.position?.x || 0}, y=#{obj.position?.y || 0}\n"
+        if objectsData
+          objectList = Object.keys(objectsData)
           
-          if obj.shape == "rectangle" and obj.size
-            output += "  Size: #{obj.size.width} x #{obj.size.height}\n"
-            output += "  Usage: rect(#{obj.position?.x || 0}, #{obj.position?.y || 0}, #{obj.size.width}, #{obj.size.height})\n"
-          else if obj.shape == "circle" and obj.radius
-            output += "  Radius: #{obj.radius}\n"
-            output += "  Usage: circle(#{obj.position?.x || 0}, #{obj.position?.y || 0}, #{obj.radius})\n"
+          # Console log everything nicely
+          console.log("=== ALL OBJECTS ===")
+          console.log("Total objects:", objectList.length)
+          for objId in objectList
+            obj = objectsData[objId]
+            console.log("#{objId}:", obj)
+          console.log("=== END ALL OBJECTS ===")
           
-          output += "  Class: #{obj.class || 'none'}\n"
-          output += "  Components: #{obj.components?.join(', ') || 'none'}\n"
+          output = "=== ALL OBJECTS (#{objectList.length}) ===\n\n"
           
-          if obj.variableValues?.visual?.color
-            output += "  Color: #{obj.variableValues.visual.color}\n"
+          for objId in objectList
+            obj = objectsData[objId]
+            output += "#{objId.toUpperCase()}\n"
+            output += "  Shape: #{obj.shape}\n"
+            output += "  Position: x=#{obj.position?.x || 0}, y=#{obj.position?.y || 0}\n"
             
-          output += "\n"
-        
-        output += "--- Quick Reference ---\n"
-        output += "draw_object(\"object_id\")\n"
-        output += "get_object(\"object_id\")\n"
-        output += "get_all_objects()\n"
-        
-        resultDiv.textContent = output
+            if obj.shape == "rectangle" and obj.size
+              output += "  Size: #{obj.size.width} x #{obj.size.height}\n"
+              output += "  Usage: rect(#{obj.position?.x || 0}, #{obj.position?.y || 0}, #{obj.size.width}, #{obj.size.height})\n"
+            else if obj.shape == "circle" and obj.radius
+              output += "  Radius: #{obj.radius}\n"
+              output += "  Usage: circle(#{obj.position?.x || 0}, #{obj.position?.y || 0}, #{obj.radius})\n"
+            
+            output += "  Class: #{obj.class || 'none'}\n"
+            output += "  Components: #{obj.components?.join(', ') || 'none'}\n"
+            
+            if obj.variableValues?.visual?.color
+              output += "  Color: #{obj.variableValues.visual.color}\n"
+              
+            output += "\n"
+          
+          output += "--- Quick Reference ---\n"
+          output += "drawObject(\"object_id\")\n"
+          output += "getObject(\"object_id\")\n"
+          output += "drawAllObjects()\n"
+          
+          resultDiv.textContent = output
+        else
+          console.log("No objects found in response:", msg.data)
+          resultDiv.textContent = "No objects found in db.json\n\nMake sure the server is running and db.json exists."
       else
-        console.log("No objects found in response:", msg.data)
-        resultDiv.textContent = "No objects found in db.json\n\nMake sure the server is running and db.json exists."
+        resultDiv.textContent = "No data received from server"
 
   createSprite:(name,img,callback)->
     @checkSave true,()=>

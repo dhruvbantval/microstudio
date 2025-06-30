@@ -159,7 +159,14 @@ class @Project
 
   fileUpdated:(msg)->
     if msg.file.indexOf("ms/") == 0
-      name = msg.file.substring("ms/".length,msg.file.indexOf(".ms"))
+      # Handle both .ms and .js files in the ms/ directory
+      if msg.file.indexOf(".ms") > 0
+        name = msg.file.substring("ms/".length,msg.file.indexOf(".ms"))
+      else if msg.file.indexOf(".js") > 0
+        name = msg.file.substring("ms/".length,msg.file.indexOf(".js"))
+      else
+        name = msg.file.substring("ms/".length)
+      
       if @source_table[name]?
         @source_table[name].reload()
       else
@@ -254,50 +261,207 @@ class @Project
         callback() if callback?
 
   processComponentData:(data)->
-    if data.objects
+    if data.entities or data.objects
       @generateComponentCode(data)
 
   generateComponentCode:(data)->
-    # Generate simple drawing calls from db.json
-    codeLines = []
+    # Generate component data file and functions library
+    console.info "Starting component code generation..."
+    console.info "Data received:", data
     
-    if data.objects
-      for objectName, objectData of data.objects
-        x = objectData.position?.x || 0
-        y = objectData.position?.y || 0
+    # Check project language and warn if needed
+    if @language != "javascript"
+      console.warn "⚠️ Project language is set to '#{@language}'. For JavaScript files, consider changing project language to 'javascript' in project settings."
+    
+    # Generate all three files
+    console.info "Generating component_data.js..."
+    @generateComponentDataFile(data)
+    
+    console.info "Generating functions.js..."
+    @generateFunctionsLibrary(data)
+    
+    console.info "Generating main.js..."
+    @generateMainFileTemplate()
+    
+    # Show success message after a short delay to ensure files are created
+    setTimeout ()=>
+      console.info "Component system files generated successfully!"
+      if @language != "javascript"
+        console.info "💡 Tip: Change project language to 'JavaScript' in project settings for better syntax highlighting"
+    , 1000
+
+  generateComponentDataFile:(data)->
+    # Generate clean component data in JavaScript for microStudio
+    codeLines = []
+    codeLines.push "// Component data from db.json"
+    codeLines.push "// This object is globally available across all files in microStudio"
+    codeLines.push "const component_objects = {"
+    
+    # Use entities if available, fallback to objects for backwards compatibility
+    objectsData = data.entities || data.objects
+    
+    if objectsData
+      objectEntries = []
+      for objectName, objectData of objectsData
+        objLines = []
+        objLines.push "  #{objectName}: {"
+        objLines.push "    shape: \"#{objectData.shape}\","
+        objLines.push "    x: #{objectData.position?.x || 0},"
+        objLines.push "    y: #{objectData.position?.y || 0},"
         
         if objectData.shape == "rectangle" and objectData.size
-          codeLines.push "drawSprite('#{objectName}',#{x}, #{y}, #{objectData.size.width}, #{objectData.size.height})"
+          objLines.push "    w: #{objectData.size.width},"
+          objLines.push "    h: #{objectData.size.height},"
         else if objectData.shape == "circle" and objectData.radius
-          codeLines.push "drawSprite('#{objectName}',#{x}, #{y}, #{objectData.size.width}, #{objectData.size.height})"
+          objLines.push "    r: #{objectData.radius},"
+        
+        if objectData.variableValues?.visual?.color
+          objLines.push "    color: \"#{objectData.variableValues.visual.color}\","
+        
+        if objectData.components and objectData.components.length > 0
+          objLines.push "    components: #{JSON.stringify(objectData.components)},"
+        
+        if objectData.variableValues
+          objLines.push "    data: {"
+          for component, values of objectData.variableValues
+            objLines.push "      #{component}: {"
+            for key, value of values
+              if typeof value == "string"
+                objLines.push "        #{key}: \"#{value}\","
+              else
+                objLines.push "        #{key}: #{JSON.stringify(value)},"
+            objLines.push "      },"
+          objLines.push "    },"
+        
+        objLines.push "  },"
+        objectEntries.push objLines.join("\n")
+      
+      codeLines.push objectEntries.join("\n")
     
-    # Insert the code into the main file
-    @insertCodeIntoMainFile(codeLines.join("\n"))
+    codeLines.push "};"
+    
+    @insertCodeIntoFile(codeLines.join("\n"), "component_data", "js")
 
-  insertCodeIntoMainFile:(code)->
-    # Find or create the main microScript file
-    mainFile = @getSource("main")
-    if not mainFile
-      mainFile = @createSource("main")
+  generateFunctionsLibrary:(data)->
+    # Generate functions library in JavaScript for microStudio
+    lines = []
+    lines.push "// Component Functions Library"
+    lines.push "// All functions are globally available across files in microStudio"
+    lines.push ""
     
-    # Get current content and append the generated code
-    currentContent = mainFile.content || ""
-    if currentContent.length > 0 and not currentContent.endsWith("\n")
-      currentContent += "\n"
+    # Core drawing functions
+    lines.push "function drawObject(id, customX, customY) {"
+    lines.push "  if (component_objects[id]) {"
+    lines.push "    const obj = component_objects[id];"
+    lines.push "    const x = customX !== undefined ? customX : obj.x;"
+    lines.push "    const y = customY !== undefined ? customY : obj.y;"
+    lines.push "    "
+    lines.push "    if (obj.color) screen.setDrawColor(obj.color);"
+    lines.push "    "
+    lines.push "    if (obj.shape === 'rectangle') {"
+    lines.push "      screen.fillRect(x, y, obj.w, obj.h);"
+    lines.push "    } else if (obj.shape === 'circle') {"
+    lines.push "      screen.fillRound(x, y, obj.r * 2, obj.r * 2);"
+    lines.push "    }"
+    lines.push "  }"
+    lines.push "}"
+    lines.push ""
     
-    newContent = currentContent + "\n" + code
+    # Component system functions
+    lines.push "function applyPhysics(id, dt) {"
+    lines.push "  if (component_objects[id] && component_objects[id].data && component_objects[id].data.physics) {"
+    lines.push "    const obj = component_objects[id];"
+    lines.push "    const physics = obj.data.physics;"
+    lines.push "    "
+    lines.push "    // Apply gravity"
+    lines.push "    if (physics.gravity) obj.y += physics.gravity * dt;"
+    lines.push "    "
+    lines.push "    // Apply friction (simple implementation)"
+    lines.push "    if (physics.friction && obj.velocity_x) {"
+    lines.push "      obj.velocity_x *= (1 - physics.friction * dt);"
+    lines.push "    }"
+    lines.push "  }"
+    lines.push "}"
+    lines.push ""
     
-    # Update the file content
-    mainFile.content = newContent
-    @app.editor.setCode(newContent)
+    lines.push "function applyAllPhysics(dt) {"
+    lines.push "  for (const id of Object.keys(component_objects)) {"
+    lines.push "    applyPhysics(id, dt);"
+    lines.push "  }"
+    lines.push "}"
+    lines.push ""
     
-    # Save the file
-    @app.client.sendRequest {
-      name: "write_project_file"
-      project: @id
-      file: "ms/main.ms"
-      content: newContent
-    }
+    # Utility functions
+    lines.push "function getObject(id) {"
+    lines.push "  return component_objects[id];"
+    lines.push "}"
+    lines.push ""
+    
+    lines.push "function getObjectsWithComponent(componentName) {"
+    lines.push "  const result = [];"
+    lines.push "  for (const id of Object.keys(component_objects)) {"
+    lines.push "    const obj = component_objects[id];"
+    lines.push "    if (obj.components && obj.components.indexOf(componentName) >= 0) {"
+    lines.push "      result.push(id);"
+    lines.push "    }"
+    lines.push "  }"
+    lines.push "  return result;"
+    lines.push "}"
+    lines.push ""
+    
+    lines.push "function drawAllObjects() {"
+    lines.push "  for (const id of Object.keys(component_objects)) {"
+    lines.push "    drawObject(id);"
+    lines.push "  }"
+    lines.push "}"
+    lines.push ""
+    
+    # Example usage
+    lines.push "/* Example usage in main.js:"
+    lines.push "function init() {"
+    lines.push "  // Setup complete - component_objects and all functions are available"
+    lines.push "}"
+    lines.push ""
+    lines.push "function update() {"
+    lines.push "  applyAllPhysics(1/60);  // 60 FPS"
+    lines.push "}"
+    lines.push ""
+    lines.push "function draw() {"
+    lines.push "  screen.clear();"
+    lines.push "  drawAllObjects();"
+    lines.push "}"
+    lines.push "*/"
+    
+    @insertCodeIntoFile(lines.join("\n"), "functions", "js")
+
+  generateMainFileTemplate:->
+    # Generate a clean main.js template for microStudio
+    lines = []
+    lines.push "// Main game logic - uses component_objects and functions from other files"
+    lines.push "// In microStudio, all files are automatically available globally"
+    lines.push ""
+    lines.push "function init() {"
+    lines.push "  // Initialization code here"
+    lines.push "  console.log('Component system initialized with', Object.keys(component_objects).length, 'objects');"
+    lines.push "}"
+    lines.push ""
+    lines.push "function update() {"
+    lines.push "  // Update physics and game logic"
+    lines.push "  applyAllPhysics(1/60);  // 60 FPS"
+    lines.push "}"
+    lines.push ""
+    lines.push "function draw() {"
+    lines.push "  screen.clear();"
+    lines.push "  "
+    lines.push "  // Draw all objects"
+    lines.push "  drawAllObjects();"
+    lines.push "  "
+    lines.push "  // Or draw specific objects:"
+    lines.push "  // drawObject('rect1');"
+    lines.push "  // drawObject('circle1', 150, 200);  // custom position"
+    lines.push "}"
+    
+    @insertCodeIntoFile(lines.join("\n"), "main", "js")
 
   addSource:(file)->
     s = new ProjectSource @,file.file,file.size
@@ -309,13 +473,14 @@ class @Project
   getSource:(name)->
     @source_table[name]
 
-  createSource:(basename="source")->
+  createSource:(basename="source", fileType="ms")->
     count = 2
     filename = basename
     while @getSource(filename)?
       filename = "#{basename}#{count++}"
 
-    source = new ProjectSource @,filename+".ms"
+    fileExtension = if fileType == "js" then "js" else "ms"
+    source = new ProjectSource @,filename+".#{fileExtension}"
     source.fetched = true
     @source_table[source.name] = source
     @source_list.push source
@@ -672,3 +837,30 @@ class @Project
       return
 
     send()
+
+  insertCodeIntoFile:(code, filename, fileType = "ms")->
+    # Create or overwrite the file directly on the server
+    fileExtension = if fileType == "js" then "js" else "ms"
+    
+    # Save the file directly to the server
+    @app.client.sendRequest {
+      name: "write_project_file"
+      project: @id
+      file: "ms/#{filename}.#{fileExtension}"
+      content: code
+    }, (msg)=>
+      console.info "Created file: #{filename}.#{fileExtension}"
+      
+      # Manually trigger file updated to ensure proper handling
+      @fileUpdated
+        file: "ms/#{filename}.#{fileExtension}"
+        content: code
+      
+      # If this is the main file, switch to it in the editor
+      if filename == "main"
+        setTimeout ()=>
+          # Find and select the new file
+          source = @getSource(filename)
+          if source and @app.editor
+            @app.editor.setSelectedItem(source.name)
+        , 500

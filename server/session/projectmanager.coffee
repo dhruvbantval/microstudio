@@ -293,10 +293,10 @@ class @ProjectManager
 
     file = "#{@project.owner.id}/#{@project.id}/#{data.file}"
 
-    encoding = if data.file.endsWith(".ms") or data.file.endsWith(".json") or data.file.endsWith(".md") then "text" else "base64"
+    encoding = if data.file.endsWith(".ms") or data.file.endsWith(".js") or data.file.endsWith(".json") or data.file.endsWith(".md") then "text" else "base64"
 
     @project.content.files.read file,encoding,(content)=>
-      out = if data.file.endsWith(".ms") or data.file.endsWith(".json") or data.file.endsWith(".md") then "utf8" else "base64"
+      out = if data.file.endsWith(".ms") or data.file.endsWith(".js") or data.file.endsWith(".json") or data.file.endsWith(".md") then "utf8" else "base64"
 
       if content?
         session.send
@@ -330,7 +330,7 @@ class @ProjectManager
 
         return
 
-    if not /^(ms|sprites|maps|sounds|music|doc|assets)\/[a-z0-9_]{1,40}(-[a-z0-9_]{1,40}){0,10}.(ms|png|json|wav|mp3|ogg|flac|md|glb|obj|jpg|ttf|txt|csv|wasm)$/.test(data.file)
+    if not /^(ms|sprites|maps|sounds|music|doc|assets)\/[a-z0-9_]{1,40}(-[a-z0-9_]{1,40}){0,10}.(ms|png|json|wav|mp3|ogg|flac|md|glb|obj|jpg|ttf|txt|csv|wasm|js)$/.test(data.file)
       console.info "wrong file name: #{data.file}"
       return
 
@@ -342,7 +342,7 @@ class @ProjectManager
     file = "#{@project.owner.id}/#{@project.id}/#{data.file}"
 
     if data.content?
-      if data.file.split(".")[1] in ["ms","json","md","txt","csv"]
+      if data.file.split(".")[1] in ["ms","json","md","txt","csv","js"]
         content = data.content
       else
         content = new Buffer(data.content,"base64")
@@ -379,11 +379,11 @@ class @ProjectManager
     return if typeof data.dest != "string"
     return if data.dest.length>250
 
-    if not /^(ms|sprites|maps|sounds|music|doc|assets)\/[a-z0-9_]{1,40}(-[a-z0-9_]{1,40}){0,10}.(ms|png|json|wav|mp3|ogg|flac|md|glb|obj|jpg|ttf|txt|csv|wasm)$/.test(data.source)
+    if not /^(ms|sprites|maps|sounds|music|doc|assets)\/[a-z0-9_]{1,40}(-[a-z0-9_]{1,40}){0,10}.(ms|png|json|wav|mp3|ogg|flac|md|glb|obj|jpg|ttf|txt|csv|wasm|js)$/.test(data.source)
       console.info "wrong source name: #{data.source}"
       return
 
-    if not /^(ms|sprites|maps|sounds|music|doc|assets)\/[a-z0-9_]{1,40}(-[a-z0-9_]{1,40}){0,10}.(ms|png|json|wav|mp3|ogg|flac|md|glb|obj|jpg|ttf|txt|csv|wasm)$/.test(data.dest)
+    if not /^(ms|sprites|maps|sounds|music|doc|assets)\/[a-z0-9_]{1,40}(-[a-z0-9_]{1,40}){0,10}.(ms|png|json|wav|mp3|ogg|flac|md|glb|obj|jpg|ttf|txt|csv|wasm|js)$/.test(data.dest)
       console.info "wrong dest name: #{data.dest}"
       return
 

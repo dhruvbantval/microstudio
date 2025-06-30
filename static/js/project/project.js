@@ -227,7 +227,14 @@
     fileUpdated(msg) {
       var name;
       if (msg.file.indexOf("ms/") === 0) {
-        name = msg.file.substring("ms/".length, msg.file.indexOf(".ms"));
+        // Handle both .ms and .js files in the ms/ directory
+        if (msg.file.indexOf(".ms") > 0) {
+          name = msg.file.substring("ms/".length, msg.file.indexOf(".ms"));
+        } else if (msg.file.indexOf(".js") > 0) {
+          name = msg.file.substring("ms/".length, msg.file.indexOf(".js"));
+        } else {
+          name = msg.file.substring("ms/".length);
+        }
         if (this.source_table[name] != null) {
           return this.source_table[name].reload();
         } else {
@@ -350,59 +357,214 @@
     }
 
     processComponentData(data) {
-      if (data.objects) {
+      if (data.entities || data.objects) {
         return this.generateComponentCode(data);
       }
     }
 
     generateComponentCode(data) {
-      var codeLines, objectData, objectName, ref, ref1, ref2, x, y;
-      // Generate simple drawing calls from db.json
-      codeLines = [];
-      if (data.objects) {
-        ref = data.objects;
-        for (objectName in ref) {
-          objectData = ref[objectName];
-          x = ((ref1 = objectData.position) != null ? ref1.x : void 0) || 0;
-          y = ((ref2 = objectData.position) != null ? ref2.y : void 0) || 0;
-          if (objectData.shape === "rectangle" && objectData.size) {
-            codeLines.push(`drawSprite('${objectName}',${x}, ${y}, ${objectData.size.width}, ${objectData.size.height})`);
-          } else if (objectData.shape === "circle" && objectData.radius) {
-            codeLines.push(`circle(${x}, ${y}, ${objectData.radius})`);
-          }
-        }
+      // Generate component data file and functions library
+      console.info("Starting component code generation...");
+      console.info("Data received:", data);
+      
+      // Check project language and warn if needed
+      if (this.language !== "javascript") {
+        console.warn(`⚠️ Project language is set to '${this.language}'. For JavaScript files, consider changing project language to 'javascript' in project settings.`);
       }
       
-      // Insert the code into the main file
-      return this.insertCodeIntoMainFile(codeLines.join("\n"));
+      // Generate all three files
+      console.info("Generating component_data.js...");
+      this.generateComponentDataFile(data);
+      console.info("Generating functions.js...");
+      this.generateFunctionsLibrary(data);
+      console.info("Generating main.js...");
+      this.generateMainFileTemplate();
+      
+      // Show success message after a short delay to ensure files are created
+      return setTimeout(() => {
+        console.info("Component system files generated successfully!");
+        if (this.language !== "javascript") {
+          return console.info("💡 Tip: Change project language to 'JavaScript' in project settings for better syntax highlighting");
+        }
+      }, 1000);
     }
 
-    insertCodeIntoMainFile(code) {
-      var currentContent, mainFile, newContent;
-      // Find or create the main microScript file
-      mainFile = this.getSource("main");
-      if (!mainFile) {
-        mainFile = this.createSource("main");
+    generateComponentDataFile(data) {
+      var codeLines, component, key, objLines, objectData, objectEntries, objectName, objectsData, ref, ref1, ref2, ref3, ref4, value, values;
+      // Generate clean component data in JavaScript for microStudio
+      codeLines = [];
+      codeLines.push("// Component data from db.json");
+      codeLines.push("// This object is globally available across all files in microStudio");
+      codeLines.push("const component_objects = {");
+      
+      // Use entities if available, fallback to objects for backwards compatibility
+      objectsData = data.entities || data.objects;
+      if (objectsData) {
+        objectEntries = [];
+        for (objectName in objectsData) {
+          objectData = objectsData[objectName];
+          objLines = [];
+          objLines.push(`  ${objectName}: {`);
+          objLines.push(`    shape: \"${objectData.shape}\",`);
+          objLines.push(`    x: ${((ref = objectData.position) != null ? ref.x : void 0) || 0},`);
+          objLines.push(`    y: ${((ref1 = objectData.position) != null ? ref1.y : void 0) || 0},`);
+          if (objectData.shape === "rectangle" && objectData.size) {
+            objLines.push(`    w: ${objectData.size.width},`);
+            objLines.push(`    h: ${objectData.size.height},`);
+          } else if (objectData.shape === "circle" && objectData.radius) {
+            objLines.push(`    r: ${objectData.radius},`);
+          }
+          if ((ref2 = objectData.variableValues) != null ? (ref3 = ref2.visual) != null ? ref3.color : void 0 : void 0) {
+            objLines.push(`    color: \"${objectData.variableValues.visual.color}\",`);
+          }
+          if (objectData.components && objectData.components.length > 0) {
+            objLines.push(`    components: ${JSON.stringify(objectData.components)},`);
+          }
+          if (objectData.variableValues) {
+            objLines.push("    data: {");
+            ref4 = objectData.variableValues;
+            for (component in ref4) {
+              values = ref4[component];
+              objLines.push(`      ${component}: {`);
+              for (key in values) {
+                value = values[key];
+                if (typeof value === "string") {
+                  objLines.push(`        ${key}: \"${value}\",`);
+                } else {
+                  objLines.push(`        ${key}: ${JSON.stringify(value)},`);
+                }
+              }
+              objLines.push("      },");
+            }
+            objLines.push("    },");
+          }
+          objLines.push("  },");
+          objectEntries.push(objLines.join("\n"));
+        }
+        codeLines.push(objectEntries.join("\n"));
       }
+      codeLines.push("};");
+      return this.insertCodeIntoFile(codeLines.join("\n"), "component_data", "js");
+    }
+
+    generateFunctionsLibrary(data) {
+      var lines;
+      // Generate functions library in JavaScript for microStudio
+      lines = [];
+      lines.push("// Component Functions Library");
+      lines.push("// All functions are globally available across files in microStudio");
+      lines.push("");
       
-      // Get current content and append the generated code
-      currentContent = mainFile.content || "";
-      if (currentContent.length > 0 && !currentContent.endsWith("\n")) {
-        currentContent += "\n";
-      }
-      newContent = currentContent + "\n" + code;
+      // Core drawing functions
+      lines.push("function drawObject(id, customX, customY) {");
+      lines.push("  if (component_objects[id]) {");
+      lines.push("    const obj = component_objects[id];");
+      lines.push("    const x = customX !== undefined ? customX : obj.x;");
+      lines.push("    const y = customY !== undefined ? customY : obj.y;");
+      lines.push("    ");
+      lines.push("    if (obj.color) screen.setDrawColor(obj.color);");
+      lines.push("    ");
+      lines.push("    if (obj.shape === 'rectangle') {");
+      lines.push("      screen.fillRect(x, y, obj.w, obj.h);");
+      lines.push("    } else if (obj.shape === 'circle') {");
+      lines.push("      screen.fillRound(x, y, obj.r * 2, obj.r * 2);");
+      lines.push("    }");
+      lines.push("  }");
+      lines.push("}");
+      lines.push("");
       
-      // Update the file content
-      mainFile.content = newContent;
-      this.app.editor.setCode(newContent);
+      // Component system functions
+      lines.push("function applyPhysics(id, dt) {");
+      lines.push("  if (component_objects[id] && component_objects[id].data && component_objects[id].data.physics) {");
+      lines.push("    const obj = component_objects[id];");
+      lines.push("    const physics = obj.data.physics;");
+      lines.push("    ");
+      lines.push("    // Apply gravity");
+      lines.push("    if (physics.gravity) obj.y += physics.gravity * dt;");
+      lines.push("    ");
+      lines.push("    // Apply friction (simple implementation)");
+      lines.push("    if (physics.friction && obj.velocity_x) {");
+      lines.push("      obj.velocity_x *= (1 - physics.friction * dt);");
+      lines.push("    }");
+      lines.push("  }");
+      lines.push("}");
+      lines.push("");
+      lines.push("function applyAllPhysics(dt) {");
+      lines.push("  for (const id of Object.keys(component_objects)) {");
+      lines.push("    applyPhysics(id, dt);");
+      lines.push("  }");
+      lines.push("}");
+      lines.push("");
       
-      // Save the file
-      return this.app.client.sendRequest({
-        name: "write_project_file",
-        project: this.id,
-        file: "ms/main.ms",
-        content: newContent
-      });
+      // Utility functions
+      lines.push("function getObject(id) {");
+      lines.push("  return component_objects[id];");
+      lines.push("}");
+      lines.push("");
+      lines.push("function getObjectsWithComponent(componentName) {");
+      lines.push("  const result = [];");
+      lines.push("  for (const id of Object.keys(component_objects)) {");
+      lines.push("    const obj = component_objects[id];");
+      lines.push("    if (obj.components && obj.components.indexOf(componentName) >= 0) {");
+      lines.push("      result.push(id);");
+      lines.push("    }");
+      lines.push("  }");
+      lines.push("  return result;");
+      lines.push("}");
+      lines.push("");
+      lines.push("function drawAllObjects() {");
+      lines.push("  for (const id of Object.keys(component_objects)) {");
+      lines.push("    drawObject(id);");
+      lines.push("  }");
+      lines.push("}");
+      lines.push("");
+      
+      // Example usage
+      lines.push("/* Example usage in main.js:");
+      lines.push("function init() {");
+      lines.push("  // Setup complete - component_objects and all functions are available");
+      lines.push("}");
+      lines.push("");
+      lines.push("function update() {");
+      lines.push("  applyAllPhysics(1/60);  // 60 FPS");
+      lines.push("}");
+      lines.push("");
+      lines.push("function draw() {");
+      lines.push("  screen.clear();");
+      lines.push("  drawAllObjects();");
+      lines.push("}");
+      lines.push("*/");
+      return this.insertCodeIntoFile(lines.join("\n"), "functions", "js");
+    }
+
+    generateMainFileTemplate() {
+      var lines;
+      // Generate a clean main.js template for microStudio
+      lines = [];
+      lines.push("// Main game logic - uses component_objects and functions from other files");
+      lines.push("// In microStudio, all files are automatically available globally");
+      lines.push("");
+      lines.push("function init() {");
+      lines.push("  // Initialization code here");
+      lines.push("  console.log('Component system initialized with', Object.keys(component_objects).length, 'objects');");
+      lines.push("}");
+      lines.push("");
+      lines.push("function update() {");
+      lines.push("  // Update physics and game logic");
+      lines.push("  applyAllPhysics(1/60);  // 60 FPS");
+      lines.push("}");
+      lines.push("");
+      lines.push("function draw() {");
+      lines.push("  screen.clear();");
+      lines.push("  ");
+      lines.push("  // Draw all objects");
+      lines.push("  drawAllObjects();");
+      lines.push("  ");
+      lines.push("  // Or draw specific objects:");
+      lines.push("  // drawObject('rect1');");
+      lines.push("  // drawObject('circle1', 150, 200);  // custom position");
+      lines.push("}");
+      return this.insertCodeIntoFile(lines.join("\n"), "main", "js");
     }
 
     addSource(file) {
@@ -418,14 +580,15 @@
       return this.source_table[name];
     }
 
-    createSource(basename = "source") {
-      var count, filename, source;
+    createSource(basename = "source", fileType = "ms") {
+      var count, fileExtension, filename, source;
       count = 2;
       filename = basename;
       while (this.getSource(filename) != null) {
         filename = `${basename}${count++}`;
       }
-      source = new ProjectSource(this, filename + ".ms");
+      fileExtension = fileType === "js" ? "js" : "ms";
+      source = new ProjectSource(this, filename + `.${fileExtension}`);
       source.fetched = true;
       this.source_table[source.name] = source;
       this.source_list.push(source);
@@ -900,6 +1063,40 @@
         return;
       }
       return send();
+    }
+
+    insertCodeIntoFile(code, filename, fileType = "ms") {
+      var fileExtension;
+      // Create or overwrite the file directly on the server
+      fileExtension = fileType === "js" ? "js" : "ms";
+      
+      // Save the file directly to the server
+      return this.app.client.sendRequest({
+        name: "write_project_file",
+        project: this.id,
+        file: `ms/${filename}.${fileExtension}`,
+        content: code
+      }, (msg) => {
+        console.info(`Created file: ${filename}.${fileExtension}`);
+        
+        // Manually trigger file updated to ensure proper handling
+        this.fileUpdated({
+          file: `ms/${filename}.${fileExtension}`,
+          content: code
+        });
+        
+        // If this is the main file, switch to it in the editor
+        if (filename === "main") {
+          return setTimeout(() => {
+            var source;
+            // Find and select the new file
+            source = this.getSource(filename);
+            if (source && this.app.editor) {
+              return this.app.editor.setSelectedItem(source.name);
+            }
+          }, 500);
+        }
+      });
     }
 
   };
