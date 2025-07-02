@@ -198,9 +198,13 @@ class @Editor extends Manager
         parser = new @language.parser(@editor.getValue())
         p = parser.parse()
         if not parser.error_info?
-          @app.runwindow.updateCode(@selected_source+".ms",@getCode())
+          source = @app.project.getSource(@selected_source)
+          ext = if source? then source.ext else "ms"
+          @app.runwindow.updateCode(@selected_source+".#{ext}",@getCode())
       else
-        @app.runwindow.updateCode(@selected_source+".ms",@getCode())
+        source = @app.project.getSource(@selected_source)
+        ext = if source? then source.ext else "ms"
+        @app.runwindow.updateCode(@selected_source+".#{ext}",@getCode())
 
   getCurrentLine:()->
     range = @editor.getSelectionRange()

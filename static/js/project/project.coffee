@@ -272,26 +272,26 @@ class @Project
     # Check project language
     if @language == "javascript"
       console.info "✅ Project language is JavaScript - generating .js files"
-      # Generate all three files as .js files
+      # Replace existing files with new .js versions
       console.info "Generating component_data.js..."
-      @generateComponentDataFile(data)
+      @replaceOrCreateFile(data, "component_data", "js", "data")
       
       console.info "Generating functions.js..."
-      @generateFunctionsLibrary(data)
+      @replaceOrCreateFile(data, "functions", "js", "functions")
       
       console.info "Generating main.js..."
-      @generateMainFileTemplate()
+      @replaceOrCreateFile(data, "main", "js", "main")
     else
       console.warn "⚠️ Project language is '#{@language}' - generating microScript-compatible .ms files"
-      # Generate microScript-compatible versions as .ms files
+      # Replace existing files with new .ms versions
       console.info "Generating component_data.ms..."
-      @generateMicroScriptComponentDataFile(data)
+      @replaceOrCreateFile(data, "component_data", "ms", "data")
       
       console.info "Generating functions.ms..."
-      @generateMicroScriptFunctionsLibrary(data)
+      @replaceOrCreateFile(data, "functions", "ms", "functions")
       
       console.info "Generating main.ms..."
-      @generateMicroScriptMainFileTemplate()
+      @replaceOrCreateFile(data, "main", "ms", "main")
     
     # Show success message after a short delay to ensure files are created
     setTimeout ()=>
@@ -301,6 +301,47 @@ class @Project
         console.info "✅ microScript component system files generated successfully!"
         console.info "💡 Tip: Change project language to 'JavaScript' in project settings for better JavaScript support"
     , 1000
+
+  replaceOrCreateFile:(data, filename, fileType, contentType)->
+    # Check if file already exists and delete it first if it does
+    existingSource = @getSource(filename)
+    
+    if existingSource?
+      # File exists, we'll replace it
+      console.info "Replacing existing file: #{filename}.#{fileType}"
+      
+      # Delete the existing file first
+      @app.client.sendRequest {
+        name: "delete_project_file"
+        project: @id
+        file: "ms/#{filename}.#{existingSource.ext}"
+      }, (msg)=>
+        # After deletion, create the new file
+        setTimeout ()=>
+          @createComponentFile(data, filename, fileType, contentType)
+        , 100
+    else
+      # File doesn't exist, create new one
+      console.info "Creating new file: #{filename}.#{fileType}"
+      @createComponentFile(data, filename, fileType, contentType)
+
+  createComponentFile:(data, filename, fileType, contentType)->
+    switch contentType
+      when "data"
+        if fileType == "js"
+          @generateComponentDataFile(data)
+        else
+          @generateMicroScriptComponentDataFile(data)
+      when "functions"
+        if fileType == "js"
+          @generateFunctionsLibrary(data)
+        else
+          @generateMicroScriptFunctionsLibrary(data)
+      when "main"
+        if fileType == "js"
+          @generateMainFileTemplate()
+        else
+          @generateMicroScriptMainFileTemplate()
 
   generateComponentDataFile:(data)->
     # Generate clean component data in JavaScript for microStudio

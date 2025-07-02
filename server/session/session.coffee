@@ -80,6 +80,7 @@ class @Session
     @register "get_file_versions",(msg)=>@getFileVersions(msg)
     @register "sync_project_files",(msg)=>@syncProjectFiles(msg)
     @register "read_component_data",(msg)=>@readComponentData(msg)
+    @register "update_component_data",(msg)=>@updateComponentData(msg)
 
     @register "invite_to_project",(msg)=>@inviteToProject(msg)
     @register "accept_invite",(msg)=>@acceptInvite(msg)
@@ -961,6 +962,54 @@ class @Session
     catch error
       console.error 'Error reading db.json:', error
       @sendError('Failed to read component data')
+
+  updateComponentData:(data)->
+    return @sendError("not connected") if not @user?
+    
+    fs = require('fs')
+    path = require('path')
+    
+    try
+      dbPath = path.join(__dirname, '../../data/db.json')
+      
+      # Read current data
+      dbData = fs.readFileSync(dbPath, 'utf8')
+      parsedData = JSON.parse(dbData)
+      
+      # Update the specific object
+      objectId = data.objectId
+      objectData = data.objectData
+      
+      if not objectId or not objectData
+        return @sendError("Missing objectId or objectData")
+      
+      # Handle both entities and objects data structures
+      if parsedData.entities and parsedData.entities[objectId]
+        parsedData.entities[objectId] = objectData
+        console.log "Updated object '#{objectId}' in entities"
+      else if parsedData.objects and parsedData.objects[objectId]
+        parsedData.objects[objectId] = objectData
+        console.log "Updated object '#{objectId}' in objects"
+      else
+        return @sendError("Object '#{objectId}' not found in db.json")
+      
+      # Write back to file using in-place editing to avoid permission issues
+      updatedContent = JSON.stringify(parsedData, null, 2)
+      
+      # Use fs.writeFileSync for atomic operation
+      fs.writeFileSync(dbPath, updatedContent, 'utf8')
+      
+      console.log "Successfully updated db.json for object '#{objectId}'"
+      
+      @send
+        name: "update_component_data"
+        success: true
+        objectId: objectId
+        request_id: data.request_id
+        
+    catch error
+      console.error 'Error updating db.json:', error
+      @sendError("Failed to update component data: #{error.message}")
 
   listProjectFiles:(data)->
     return @sendError("not connected") if not @user?

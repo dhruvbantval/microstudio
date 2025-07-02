@@ -391,9 +391,9 @@
       // Show success message after a short delay to ensure files are created
       return setTimeout(() => {
         if (this.language === "javascript") {
-          return console.info("✅ JavaScript component system files generated successfully!");
+          return console.info("JavaScript component system files generated successfully!");
         } else {
-          console.info("✅ microScript component system files generated successfully!");
+          console.info("microScript component system files generated successfully!");
           return console.info("💡 Tip: Change project language to 'JavaScript' in project settings for better JavaScript support");
         }
       }, 1000);

@@ -498,7 +498,7 @@ z-index: 1000;
 min-width: 300px;
 border: 2px solid #444;
 box-shadow: 0 4px 8px rgba(0,0,0,0.3);`;
-        uiContainer.innerHTML = `<div style="margin-bottom: 15px; font-weight: bold; font-size: 14px; color: #4CAF50;">Object Query</div>
+        uiContainer.innerHTML = `<div style="margin-bottom: 15px; font-weight: bold; font-size: 14px; color: #4CAF50;">Object Query & Editor</div>
 <div style="margin-bottom: 10px;">
   <input type="text" id="object-id-input" placeholder="Enter object ID (e.g. rect1)" 
          style="width: 180px; padding: 5px; margin-right: 8px; color: black; border: 1px solid #666; border-radius: 3px;">
@@ -506,6 +506,7 @@ box-shadow: 0 4px 8px rgba(0,0,0,0.3);`;
 </div>
 <div style="margin-bottom: 10px;">
   <button id="list-objects-btn" style="padding: 5px 12px; margin-right: 8px; background: #2196F3; color: white; border: none; border-radius: 3px; cursor: pointer;">List All</button>
+  <button id="edit-object-btn" style="padding: 5px 12px; margin-right: 8px; background: #FF9800; color: white; border: none; border-radius: 3px; cursor: pointer; display: none;">Edit Object</button>
   <button id="close-query-ui-btn" style="padding: 5px 12px; background: #f44336; color: white; border: none; border-radius: 3px; cursor: pointer; float: right;">✕</button>
 </div>
 <div style="clear: both; margin-bottom: 5px; font-size: 12px; color: #aaa;">
@@ -528,7 +529,15 @@ box-shadow: 0 4px 8px rgba(0,0,0,0.3);`;
   font-family: 'Courier New', monospace;
   line-height: 1.3;
   word-wrap: break-word;
-">Ready for queries...</div>`;
+">Ready for queries...</div>
+<div id="object-edit-panel" style="display: none; margin-top: 10px; padding: 10px; background: rgba(0,50,0,0.8); border-radius: 5px; border: 1px solid #4CAF50;">
+  <div style="font-weight: bold; margin-bottom: 10px; color: #4CAF50;">Edit Object Properties</div>
+  <div id="object-edit-form"></div>
+  <div style="margin-top: 10px;">
+    <button id="save-object-changes-btn" style="padding: 5px 12px; margin-right: 8px; background: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer;">Save Changes</button>
+    <button id="cancel-object-edit-btn" style="padding: 5px 12px; background: #999; color: white; border: none; border-radius: 3px; cursor: pointer;">Cancel</button>
+  </div>
+</div>`;
         container.appendChild(uiContainer);
         
         // Add event listeners
@@ -537,6 +546,9 @@ box-shadow: 0 4px 8px rgba(0,0,0,0.3);`;
         });
         document.getElementById("list-objects-btn").addEventListener("click", () => {
           return this.listAllObjects();
+        });
+        document.getElementById("edit-object-btn").addEventListener("click", () => {
+          return this.showEditForm();
         });
         document.getElementById("close-query-ui-btn").addEventListener("click", () => {
           return uiContainer.remove();
@@ -550,11 +562,13 @@ box-shadow: 0 4px 8px rgba(0,0,0,0.3);`;
     }
 
     queryObjectData() {
-      var objectId, resultDiv;
+      var editBtn, objectId, resultDiv;
       objectId = document.getElementById("object-id-input").value.trim();
       resultDiv = document.getElementById("object-query-result");
+      editBtn = document.getElementById("edit-object-btn");
       if (!objectId) {
         resultDiv.textContent = "Please enter an object ID";
+        editBtn.style.display = "none";
         return;
       }
       
@@ -568,6 +582,8 @@ box-shadow: 0 4px 8px rgba(0,0,0,0.3);`;
           objectsData = msg.data.entities || msg.data.objects;
           if (objectsData && objectsData[objectId]) {
             objectData = objectsData[objectId];
+            this.currentObjectData = objectData; // Store for editing
+            this.currentObjectId = objectId;
             
             // Console log the data nicely
             console.log(`=== OBJECT DATA FOR '${objectId}' ===`);
@@ -617,14 +633,17 @@ box-shadow: 0 4px 8px rgba(0,0,0,0.3);`;
             } else {
               output += `drawObject(\"${objectId}\", 200, 150)  // custom position`;
             }
-            return resultDiv.textContent = output;
+            resultDiv.textContent = output;
+            return editBtn.style.display = "inline-block"; // Show edit button
           } else {
             console.log(`Object '${objectId}' not found in data:`, msg.data);
             availableObjects = objectsData ? Object.keys(objectsData).join(', ') : 'none';
-            return resultDiv.textContent = `Object '${objectId}' not found\n\nAvailable objects:\n${availableObjects}`;
+            resultDiv.textContent = `Object '${objectId}' not found\n\nAvailable objects:\n${availableObjects}`;
+            return editBtn.style.display = "none";
           }
         } else {
-          return resultDiv.textContent = "No data received from server";
+          resultDiv.textContent = "No data received from server";
+          return editBtn.style.display = "none";
         }
       });
     }
@@ -1144,6 +1163,169 @@ box-shadow: 0 4px 8px rgba(0,0,0,0.3);`;
     renameItem(item, name) {
       this.app.project.changeSpriteName(item.name, name); // needed to trigger updating of maps
       return super.renameItem(item, name);
+    }
+
+    showEditForm() {
+      var checked, component, editForm, editPanel, formHTML, key, ref, ref1, ref2, value, values;
+      if (!(this.currentObjectData && this.currentObjectId)) {
+        return;
+      }
+      editPanel = document.getElementById("object-edit-panel");
+      editForm = document.getElementById("object-edit-form");
+      
+      // Build edit form based on object data
+      formHTML = "";
+      
+      // Position editing
+      formHTML += `<div style="margin-bottom: 10px;">
+  <label style="display: inline-block; width: 60px; color: #4CAF50;">Position:</label>
+  <span style="color: #ccc;">X:</span> <input type="number" id="edit-pos-x" value="${((ref = this.currentObjectData.position) != null ? ref.x : void 0) || 0}" style="width: 50px; margin-right: 8px; color: black; padding: 2px;">
+  <span style="color: #ccc;">Y:</span> <input type="number" id="edit-pos-y" value="${((ref1 = this.currentObjectData.position) != null ? ref1.y : void 0) || 0}" style="width: 50px; color: black; padding: 2px;">
+</div>`;
+      
+      // Size/radius editing based on shape
+      if (this.currentObjectData.shape === "rectangle" && this.currentObjectData.size) {
+        formHTML += `<div style="margin-bottom: 10px;">
+  <label style="display: inline-block; width: 60px; color: #4CAF50;">Size:</label>
+  <span style="color: #ccc;">W:</span> <input type="number" id="edit-size-w" value="${this.currentObjectData.size.width}" style="width: 50px; margin-right: 8px; color: black; padding: 2px;">
+  <span style="color: #ccc;">H:</span> <input type="number" id="edit-size-h" value="${this.currentObjectData.size.height}" style="width: 50px; color: black; padding: 2px;">
+</div>`;
+      } else if (this.currentObjectData.shape === "circle" && this.currentObjectData.radius) {
+        formHTML += `<div style="margin-bottom: 10px;">
+  <label style="display: inline-block; width: 60px; color: #4CAF50;">Radius:</label>
+  <input type="number" id="edit-radius" value="${this.currentObjectData.radius}" style="width: 60px; color: black; padding: 2px;">
+</div>`;
+      }
+      
+      // Component variables editing
+      if (this.currentObjectData.variableValues) {
+        ref2 = this.currentObjectData.variableValues;
+        for (component in ref2) {
+          values = ref2[component];
+          formHTML += `<div style="margin-bottom: 8px; color: #FFA500;">${component.toUpperCase()} Component:</div>`;
+          for (key in values) {
+            value = values[key];
+            if (typeof value === "number") {
+              formHTML += `<div style="margin-bottom: 6px; margin-left: 10px;">
+  <label style="display: inline-block; width: 80px; color: #ccc;">${key}:</label>
+  <input type="number" id="edit-${component}-${key}" value="${value}" step="0.1" style="width: 80px; color: black; padding: 2px;">
+</div>`;
+            } else if (typeof value === "string") {
+              formHTML += `<div style="margin-bottom: 6px; margin-left: 10px;">
+  <label style="display: inline-block; width: 80px; color: #ccc;">${key}:</label>
+  <input type="text" id="edit-${component}-${key}" value="${value}" style="width: 100px; color: black; padding: 2px;">
+</div>`;
+            } else if (typeof value === "boolean") {
+              checked = value ? "checked" : "";
+              formHTML += `<div style="margin-bottom: 6px; margin-left: 10px;">
+  <label style="color: #ccc;">
+    <input type="checkbox" id="edit-${component}-${key}" ${checked} style="margin-right: 5px;">
+    ${key}
+  </label>
+</div>`;
+            }
+          }
+        }
+      }
+      editForm.innerHTML = formHTML;
+      editPanel.style.display = "block";
+      
+      // Add event listeners for save and cancel buttons (if not already added)
+      if (!this.editListenersAdded) {
+        document.getElementById("save-object-changes-btn").addEventListener("click", () => {
+          return this.saveObjectChanges();
+        });
+        document.getElementById("cancel-object-edit-btn").addEventListener("click", () => {
+          return this.cancelObjectEdit();
+        });
+        return this.editListenersAdded = true;
+      }
+    }
+
+    saveObjectChanges() {
+      var component, inputElement, key, posX, posY, radius, ref, ref1, ref2, ref3, ref4, ref5, sizeH, sizeW, updatedData, value, values;
+      if (!(this.currentObjectData && this.currentObjectId)) {
+        return;
+      }
+      
+      // Collect form data
+      updatedData = JSON.parse(JSON.stringify(this.currentObjectData)); // Deep copy
+      
+      // Update position
+      posX = (ref = document.getElementById("edit-pos-x")) != null ? ref.value : void 0;
+      posY = (ref1 = document.getElementById("edit-pos-y")) != null ? ref1.value : void 0;
+      if ((posX != null) && (posY != null)) {
+        updatedData.position = {
+          x: parseFloat(posX),
+          y: parseFloat(posY)
+        };
+      }
+      
+      // Update size/radius
+      if (updatedData.shape === "rectangle") {
+        sizeW = (ref2 = document.getElementById("edit-size-w")) != null ? ref2.value : void 0;
+        sizeH = (ref3 = document.getElementById("edit-size-h")) != null ? ref3.value : void 0;
+        if ((sizeW != null) && (sizeH != null)) {
+          updatedData.size = {
+            width: parseFloat(sizeW),
+            height: parseFloat(sizeH)
+          };
+        }
+      } else if (updatedData.shape === "circle") {
+        radius = (ref4 = document.getElementById("edit-radius")) != null ? ref4.value : void 0;
+        if (radius != null) {
+          updatedData.radius = parseFloat(radius);
+        }
+      }
+      
+      // Update component variables
+      if (updatedData.variableValues) {
+        ref5 = updatedData.variableValues;
+        for (component in ref5) {
+          values = ref5[component];
+          for (key in values) {
+            value = values[key];
+            inputElement = document.getElementById(`edit-${component}-${key}`);
+            if (inputElement != null) {
+              if (typeof value === "number") {
+                updatedData.variableValues[component][key] = parseFloat(inputElement.value);
+              } else if (typeof value === "string") {
+                updatedData.variableValues[component][key] = inputElement.value;
+              } else if (typeof value === "boolean") {
+                updatedData.variableValues[component][key] = inputElement.checked;
+              }
+            }
+          }
+        }
+      }
+      
+      // Send update request to server
+      return this.app.client.sendRequest({
+        name: "update_component_data",
+        objectId: this.currentObjectId,
+        objectData: updatedData
+      }, (msg) => {
+        if (msg.success) {
+          console.log("Object updated successfully:", this.currentObjectId, updatedData);
+          this.app.appui.showNotification(`✅ Object '${this.currentObjectId}' updated successfully!`);
+          
+          // Refresh the display
+          this.queryObjectData();
+          this.cancelObjectEdit();
+          
+          // Regenerate component files
+          return this.app.project.importComponentData();
+        } else {
+          console.error("Failed to update object:", msg.error);
+          return this.app.appui.showNotification(`❌ Failed to update object: ${msg.error || 'Unknown error'}`);
+        }
+      });
+    }
+
+    cancelObjectEdit() {
+      var editPanel;
+      editPanel = document.getElementById("object-edit-panel");
+      return editPanel.style.display = "none";
     }
 
   };

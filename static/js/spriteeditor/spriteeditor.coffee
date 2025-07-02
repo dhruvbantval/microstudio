@@ -391,7 +391,7 @@ class @SpriteEditor extends Manager
       """
       
       uiContainer.innerHTML = """
-        <div style="margin-bottom: 15px; font-weight: bold; font-size: 14px; color: #4CAF50;">Object Query</div>
+        <div style="margin-bottom: 15px; font-weight: bold; font-size: 14px; color: #4CAF50;">Object Query & Editor</div>
         <div style="margin-bottom: 10px;">
           <input type="text" id="object-id-input" placeholder="Enter object ID (e.g. rect1)" 
                  style="width: 180px; padding: 5px; margin-right: 8px; color: black; border: 1px solid #666; border-radius: 3px;">
@@ -399,6 +399,7 @@ class @SpriteEditor extends Manager
         </div>
         <div style="margin-bottom: 10px;">
           <button id="list-objects-btn" style="padding: 5px 12px; margin-right: 8px; background: #2196F3; color: white; border: none; border-radius: 3px; cursor: pointer;">List All</button>
+          <button id="edit-object-btn" style="padding: 5px 12px; margin-right: 8px; background: #FF9800; color: white; border: none; border-radius: 3px; cursor: pointer; display: none;">Edit Object</button>
           <button id="close-query-ui-btn" style="padding: 5px 12px; background: #f44336; color: white; border: none; border-radius: 3px; cursor: pointer; float: right;">✕</button>
         </div>
         <div style="clear: both; margin-bottom: 5px; font-size: 12px; color: #aaa;">
@@ -422,6 +423,14 @@ class @SpriteEditor extends Manager
           line-height: 1.3;
           word-wrap: break-word;
         ">Ready for queries...</div>
+        <div id="object-edit-panel" style="display: none; margin-top: 10px; padding: 10px; background: rgba(0,50,0,0.8); border-radius: 5px; border: 1px solid #4CAF50;">
+          <div style="font-weight: bold; margin-bottom: 10px; color: #4CAF50;">Edit Object Properties</div>
+          <div id="object-edit-form"></div>
+          <div style="margin-top: 10px;">
+            <button id="save-object-changes-btn" style="padding: 5px 12px; margin-right: 8px; background: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer;">Save Changes</button>
+            <button id="cancel-object-edit-btn" style="padding: 5px 12px; background: #999; color: white; border: none; border-radius: 3px; cursor: pointer;">Cancel</button>
+          </div>
+        </div>
       """
       
       container.appendChild(uiContainer)
@@ -433,6 +442,9 @@ class @SpriteEditor extends Manager
       document.getElementById("list-objects-btn").addEventListener "click", ()=>
         @listAllObjects()
         
+      document.getElementById("edit-object-btn").addEventListener "click", ()=>
+        @showEditForm()
+        
       document.getElementById("close-query-ui-btn").addEventListener "click", ()=>
         uiContainer.remove()
       
@@ -443,9 +455,11 @@ class @SpriteEditor extends Manager
   queryObjectData:()->
     objectId = document.getElementById("object-id-input").value.trim()
     resultDiv = document.getElementById("object-query-result")
+    editBtn = document.getElementById("edit-object-btn")
     
     if not objectId
       resultDiv.textContent = "Please enter an object ID"
+      editBtn.style.display = "none"
       return
     
     # Send request to get object data
@@ -458,6 +472,8 @@ class @SpriteEditor extends Manager
         
         if objectsData and objectsData[objectId]
           objectData = objectsData[objectId]
+          @currentObjectData = objectData  # Store for editing
+          @currentObjectId = objectId
           
           # Console log the data nicely
           console.log("=== OBJECT DATA FOR '#{objectId}' ===")
@@ -504,12 +520,15 @@ class @SpriteEditor extends Manager
             output += "drawObject(\"#{objectId}\", 200, 150)  // custom position"
           
           resultDiv.textContent = output
+          editBtn.style.display = "inline-block"  # Show edit button
         else
           console.log("Object '#{objectId}' not found in data:", msg.data)
           availableObjects = if objectsData then Object.keys(objectsData).join(', ') else 'none'
           resultDiv.textContent = "Object '#{objectId}' not found\n\nAvailable objects:\n#{availableObjects}"
+          editBtn.style.display = "none"
       else
         resultDiv.textContent = "No data received from server"
+        editBtn.style.display = "none"
 
   listAllObjects:()->
     resultDiv = document.getElementById("object-query-result")
@@ -925,3 +944,141 @@ class @SpriteEditor extends Manager
   renameItem:(item,name)->
     @app.project.changeSpriteName item.name,name # needed to trigger updating of maps
     super(item,name)
+
+  showEditForm:()->
+    return unless @currentObjectData and @currentObjectId
+    
+    editPanel = document.getElementById("object-edit-panel")
+    editForm = document.getElementById("object-edit-form")
+    
+    # Build edit form based on object data
+    formHTML = ""
+    
+    # Position editing
+    formHTML += """
+      <div style="margin-bottom: 10px;">
+        <label style="display: inline-block; width: 60px; color: #4CAF50;">Position:</label>
+        <span style="color: #ccc;">X:</span> <input type="number" id="edit-pos-x" value="#{@currentObjectData.position?.x || 0}" style="width: 50px; margin-right: 8px; color: black; padding: 2px;">
+        <span style="color: #ccc;">Y:</span> <input type="number" id="edit-pos-y" value="#{@currentObjectData.position?.y || 0}" style="width: 50px; color: black; padding: 2px;">
+      </div>
+    """
+    
+    # Size/radius editing based on shape
+    if @currentObjectData.shape == "rectangle" and @currentObjectData.size
+      formHTML += """
+        <div style="margin-bottom: 10px;">
+          <label style="display: inline-block; width: 60px; color: #4CAF50;">Size:</label>
+          <span style="color: #ccc;">W:</span> <input type="number" id="edit-size-w" value="#{@currentObjectData.size.width}" style="width: 50px; margin-right: 8px; color: black; padding: 2px;">
+          <span style="color: #ccc;">H:</span> <input type="number" id="edit-size-h" value="#{@currentObjectData.size.height}" style="width: 50px; color: black; padding: 2px;">
+        </div>
+      """
+    else if @currentObjectData.shape == "circle" and @currentObjectData.radius
+      formHTML += """
+        <div style="margin-bottom: 10px;">
+          <label style="display: inline-block; width: 60px; color: #4CAF50;">Radius:</label>
+          <input type="number" id="edit-radius" value="#{@currentObjectData.radius}" style="width: 60px; color: black; padding: 2px;">
+        </div>
+      """
+    
+    # Component variables editing
+    if @currentObjectData.variableValues
+      for component, values of @currentObjectData.variableValues
+        formHTML += """<div style="margin-bottom: 8px; color: #FFA500;">#{component.toUpperCase()} Component:</div>"""
+        for key, value of values
+          if typeof value == "number"
+            formHTML += """
+              <div style="margin-bottom: 6px; margin-left: 10px;">
+                <label style="display: inline-block; width: 80px; color: #ccc;">#{key}:</label>
+                <input type="number" id="edit-#{component}-#{key}" value="#{value}" step="0.1" style="width: 80px; color: black; padding: 2px;">
+              </div>
+            """
+          else if typeof value == "string"
+            formHTML += """
+              <div style="margin-bottom: 6px; margin-left: 10px;">
+                <label style="display: inline-block; width: 80px; color: #ccc;">#{key}:</label>
+                <input type="text" id="edit-#{component}-#{key}" value="#{value}" style="width: 100px; color: black; padding: 2px;">
+              </div>
+            """
+          else if typeof value == "boolean"
+            checked = if value then "checked" else ""
+            formHTML += """
+              <div style="margin-bottom: 6px; margin-left: 10px;">
+                <label style="color: #ccc;">
+                  <input type="checkbox" id="edit-#{component}-#{key}" #{checked} style="margin-right: 5px;">
+                  #{key}
+                </label>
+              </div>
+            """
+    
+    editForm.innerHTML = formHTML
+    editPanel.style.display = "block"
+    
+    # Add event listeners for save and cancel buttons (if not already added)
+    if not @editListenersAdded
+      document.getElementById("save-object-changes-btn").addEventListener "click", ()=>
+        @saveObjectChanges()
+      
+      document.getElementById("cancel-object-edit-btn").addEventListener "click", ()=>
+        @cancelObjectEdit()
+      
+      @editListenersAdded = true
+
+  saveObjectChanges:()->
+    return unless @currentObjectData and @currentObjectId
+    
+    # Collect form data
+    updatedData = JSON.parse(JSON.stringify(@currentObjectData))  # Deep copy
+    
+    # Update position
+    posX = document.getElementById("edit-pos-x")?.value
+    posY = document.getElementById("edit-pos-y")?.value
+    if posX? and posY?
+      updatedData.position = { x: parseFloat(posX), y: parseFloat(posY) }
+    
+    # Update size/radius
+    if updatedData.shape == "rectangle"
+      sizeW = document.getElementById("edit-size-w")?.value
+      sizeH = document.getElementById("edit-size-h")?.value
+      if sizeW? and sizeH?
+        updatedData.size = { width: parseFloat(sizeW), height: parseFloat(sizeH) }
+    else if updatedData.shape == "circle"
+      radius = document.getElementById("edit-radius")?.value
+      if radius?
+        updatedData.radius = parseFloat(radius)
+    
+    # Update component variables
+    if updatedData.variableValues
+      for component, values of updatedData.variableValues
+        for key, value of values
+          inputElement = document.getElementById("edit-#{component}-#{key}")
+          if inputElement?
+            if typeof value == "number"
+              updatedData.variableValues[component][key] = parseFloat(inputElement.value)
+            else if typeof value == "string"
+              updatedData.variableValues[component][key] = inputElement.value
+            else if typeof value == "boolean"
+              updatedData.variableValues[component][key] = inputElement.checked
+    
+    # Send update request to server
+    @app.client.sendRequest {
+      name: "update_component_data"
+      objectId: @currentObjectId
+      objectData: updatedData
+    }, (msg)=>
+      if msg.success
+        console.log("Object updated successfully:", @currentObjectId, updatedData)
+        @app.appui.showNotification(" Object '#{@currentObjectId}' updated successfully!")
+        
+        # Refresh the display
+        @queryObjectData()
+        @cancelObjectEdit()
+        
+        # Regenerate component files
+        @app.project.importComponentData()
+      else
+        console.error("Failed to update object:", msg.error)
+        @app.appui.showNotification("❌ Failed to update object: #{msg.error || 'Unknown error'}")
+
+  cancelObjectEdit:()->
+    editPanel = document.getElementById("object-edit-panel")
+    editPanel.style.display = "none"
